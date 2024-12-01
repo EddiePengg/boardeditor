@@ -1,0 +1,17 @@
+{
+  "name": "@boardeditor/napkin",
+  "version": "0.0.1",
+  "description": "测试NapkinBoard的功能",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "dependencies": {
+    "@boardeditor/core": "workspace:*",
+    "@boardeditor/model": "workspace:*",
+    "rxdb": "^15.37.0"
+  },
+  "license": "ISC"
+}

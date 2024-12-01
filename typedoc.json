@@ -1,0 +1,10 @@
+{
+  "entryPoints": ["packages/core/src", "packages/model/src"],
+  "out": "packages/docs/api", // 生成文档的输出目录
+  "includeVersion": false, // 是否包含版本信息（根据需要修改）
+  "logLevel": "Error", // 只显示错误信息
+  "readme": "none", // 不生成 README 文件
+  "name": "Napkin API Documentation", // 文档的名称
+  "hideGenerator": true, // 隐藏生成器信息（替代 hidePageHeader）
+  "exclude": ["packages/napkin/**/*"] // 排除 napkin 包
+}

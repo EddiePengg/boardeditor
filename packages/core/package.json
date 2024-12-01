@@ -1,0 +1,22 @@
+{
+  "name": "@boardeditor/core",
+  "version": "0.0.1",
+  "description": "",
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "build:ts": "tsc --distDir dist",
+    "build": "tsc && rollup -c rollup.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pixi.js": "^8.5.2",
+    "rxdb": "^15.37.0",
+    "@boardeditor/model": "file:../model"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0"
+  }
+}

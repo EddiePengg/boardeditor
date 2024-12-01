@@ -1,0 +1,21 @@
+{
+  "name": "boardeditor",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "pnpm --filter @napkin/app dev",
+    "build": "pnpm --filter @napkin/app build",
+    "preview": "pnpm --filter @napkin/app preview",
+    "typedoc": "typedoc --options .\typedoc.json"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "rollup": "^4.27.4",
+    "rollup-plugin-dts": "^6.1.1",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typedoc": "^0.26.11",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

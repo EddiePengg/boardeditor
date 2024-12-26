@@ -1,6 +1,6 @@
 // ArrowManager.ts
 import { Application, Container, Graphics } from "pixi.js";
-import { Card } from "../Card/index.js";
+import { Card } from "../Card/index";
 
 export class ArrowManager {
   private static instance: ArrowManager;

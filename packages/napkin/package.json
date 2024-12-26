@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "测试NapkinBoard的功能",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,7 +11,9 @@
   "author": "",
   "dependencies": {
     "@boardeditor/core": "workspace:*",
+    "@boardeditor/layout": "workspace:*",
     "@boardeditor/model": "workspace:*",
+    "dayjs": "^1.11.13",
     "rxdb": "^15.37.0"
   },
   "license": "ISC"

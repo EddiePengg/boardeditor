@@ -1,8 +1,10 @@
 import { RxCollection, MangoQuery } from "rxdb";
-import { Whiteboard, type WhiteboardConfig } from "../Whiteboard/index.js";
+import { Whiteboard, type WhiteboardConfig } from "../Whiteboard/index";
 import { CardDocument } from "@boardeditor/model";
 import { Container, FederatedEvent } from "pixi.js";
-import { Card } from "../Card/index.js";
+import { Card } from "../Card/index";
+import { nanoid } from "nanoid";
+import { ErrorModal } from "../components/ErrorModal";
 
 export class NapkinBoard extends Whiteboard {
   private readonly cardsCollection: RxCollection<CardDocument>;
@@ -17,20 +19,19 @@ export class NapkinBoard extends Whiteboard {
 
   protected override initializeManagers(): void {
     super.initializeManagers();
-    this.whiteManager.setOnDoubleTapCallback(this.handleDoubleTap.bind(this));
+    this.whiteManager.setDoubleTapHandler(this.handleDoubleTap.bind(this));
   }
 
   private async createCard(event: FederatedEvent): Promise<Card> {
     const cardData = await this.cardsCollection.insert({
-      id: `id-${Date.now()}`,
+      id: nanoid(),
       text: "Untitled",
       created_time: new Date().toISOString(),
       last_edited_time: new Date().toISOString(),
+      in_trash: false,
     });
 
-    const card = new Card(this, cardData.text, {
-      rxDocument: cardData,
-    });
+    const card = new Card(this, cardData);
 
     const localPosition = this.mainContainer.toLocal((event as any).global);
     card.position.set(localPosition.x, localPosition.y);
@@ -66,16 +67,25 @@ export class NapkinBoard extends Whiteboard {
    * @param queryObj 搜索条件
    */
   public async search(queryObj: MangoQuery<CardDocument>) {
-    const cardDocuments = await this.cardsCollection.find(queryObj).exec();
+    try {
+      this.clear();
 
-    let cards = cardDocuments.map(
-      (item) =>
-        new Card(this, item.text, {
-          rxDocument: item,
-        })
-    );
+      const cardDocuments = await this.cardsCollection.find(queryObj).exec();
 
-    this.addCards(cards);
+      if (!cardDocuments || cardDocuments.length === 0) {
+        console.warn("未找到匹配的卡片");
+        ErrorModal.show("未找到匹配的卡片");
+        return;
+      }
+
+      let cards = cardDocuments.map((item) => new Card(this, item, {}));
+      this.addCards(cards);
+    } catch (error) {
+      console.error("搜索卡片时发生错误:", error);
+      ErrorModal.show(
+        `搜索失败: ${error instanceof Error ? error.message : "未知错误"}`
+      );
+    }
   }
 
   get cards() {

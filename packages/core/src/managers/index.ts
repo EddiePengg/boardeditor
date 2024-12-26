@@ -1,3 +1,3 @@
-export * from "./ArrowManager.js";
-export * from "./DraggableManager.js";
-export * from "./GestureManager.js";
+export * from "./ArrowManager";
+export * from "./DraggableManager";
+export * from "./GestureManager";

@@ -3,9 +3,8 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "allowJs": true
+    "rootDir": "./src"
   },
-  "include": ["src/**/*"],
-  "references": [{ "path": "../model" }]
+  "include": ["./src"],
+  "references": [{ "path": "../core" }]
 }

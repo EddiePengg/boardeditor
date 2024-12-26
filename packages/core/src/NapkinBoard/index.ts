@@ -1,1 +1,1 @@
-export * from "./NapkinBoard.js";
+export * from "./NapkinBoard";

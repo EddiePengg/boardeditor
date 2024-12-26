@@ -1,6 +1,6 @@
 import "./style.css";
 import { Card, NapkinBoard } from "@boardeditor/core";
-import { layoutCardsMasonry } from "./utils";
+import { layoutCardsMasonry } from "@boardeditor/layout";
 import { createDatabase } from "@boardeditor/model/src/utils";
 import { addRxPlugin } from "rxdb";
 import { RxDBUpdatePlugin } from "rxdb/plugins/update";
@@ -12,6 +12,7 @@ const TEM_CARDS_DATA = [
     title: "关于人生的思考",
     text: `最近在思考人生的意义和未来的方向。\n回顾过去的经历 总觉得生活像是一场长跑 每个人都在不停地奔跑着 渴望到达那个所谓的“终点”。有时候会感觉迷茫，不知道自己真正想要的是什么，也许这就是成长中的一种必经之路。读了一些哲学书，了解到每个人的追求和幸福标准都不同，或许人生的意义就是在这个过程中找到属于自己的节奏，学会接纳不完美的自己，与生活中的起伏和平共处。希望未来的自己，能少一点焦虑，多一点坚定，保持一颗热爱生活的心，继续前行，无论前路如何，都要不忘初心。`,
     tags: ["思考", "成长", "人生"],
+    created_time: new Date().toISOString(),
   },
   {
     title: "清晨的思绪",
@@ -78,15 +79,18 @@ const TEM_CARDS_DATA = [
     storage: getRxStorageDexie(),
   });
 
-  const whiteboard = new NapkinBoard(db.cards, {
-    backgroundColor: "#FFF8E6",
-  });
-  await whiteboard.initialize();
-
   const container = document.querySelector("#app");
   if (!container) {
     throw new Error("Container element not found");
   }
+
+  const whiteboard = new NapkinBoard(db.cards, {
+    backgroundColor: "#FFF8E6",
+    resizeTo: container,
+    resolution: 2,
+  });
+  await whiteboard.initialize();
+
   container.appendChild(whiteboard.app.canvas);
 
   // 初始化卡片

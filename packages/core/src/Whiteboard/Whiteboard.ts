@@ -1,10 +1,11 @@
 import { Application, Container } from "pixi.js";
-import WhiteBoardManager from "./managers/WhiteManager.js";
-import { Card } from "../Card/index.js";
+import { WhiteBoardManager } from "./managers/WhiteManager";
+import { Card } from "../Card/index";
 
 export interface WhiteboardConfig {
   backgroundColor: string;
   resolution?: number;
+  resizeTo: HTMLElement | Window;
 }
 
 export class Whiteboard implements Whiteboard {
@@ -14,11 +15,10 @@ export class Whiteboard implements Whiteboard {
   protected whiteManager!: WhiteBoardManager;
   protected readonly config: WhiteboardConfig;
 
-  protected selection: Container | null = null; // 选中元素的容器，用于显示选中元素的外框。
-
   constructor(
     config: WhiteboardConfig = {
       backgroundColor: "#1099bb",
+      resizeTo: window, // 画布大小默认和window一样大
     }
   ) {
     this.config = config;
@@ -34,8 +34,8 @@ export class Whiteboard implements Whiteboard {
   private async initializeApplication(): Promise<void> {
     await this.app.init({
       background: this.config.backgroundColor,
-      resizeTo: window,
-      resolution: this.config.resolution ?? window.devicePixelRatio ?? 1,
+      resizeTo: this.config.resizeTo,
+      resolution: this.config.resolution ?? window.devicePixelRatio ?? 1.5,
       autoDensity: true,
     });
 
@@ -53,11 +53,14 @@ export class Whiteboard implements Whiteboard {
 
   protected initializeManagers(): void {
     this.whiteManager = new WhiteBoardManager(this.app, this.mainContainer);
-    this.whiteManager.setKeyDownsHandler({
+    this.whiteManager.setKeyboardHandlers({
       Delete: (event: KeyboardEvent) => {
-        if (!this.selection) return;
-        const card = this.selection as Card;
+        const selection = this.whiteManager
+          .getBoxSelection()
+          .getSelectedElement();
+        if (!selection) return;
 
+        const card = selection as Card;
         if (card.textField.isEditing) {
           console.log("正在编辑中，不能删除");
           return;
@@ -77,15 +80,25 @@ export class Whiteboard implements Whiteboard {
 
   /**
    *
-   * 设置白板当前选中或框选的元素
+   * 设置单选
    *
    * @param selection 选中的元素
    */
   public setSelection(selection: Container | null): void {
-    if (this.selection) {
-      (this.selection as Card).setSelected(false);
-    }
-    this.selection = selection;
-    (this.selection as Card).setSelected(true);
+    this.whiteManager.getBoxSelection().selectElement(selection);
+  }
+
+  /**
+   * 清空画布上的所有元素
+   */
+  public clear(): void {
+    // 清空选中元素
+    this.whiteManager.getBoxSelection().clear();
+
+    this.mainContainer.children.forEach((child) => {
+      if (child instanceof Card) {
+        child.removeCard();
+      }
+    });
   }
 }

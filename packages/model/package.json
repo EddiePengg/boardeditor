@@ -2,15 +2,23 @@
   "name": "@boardeditor/model",
   "version": "0.0.1",
   "description": "",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "rxdb": "^15.37.0"
+  "devDependencies": {
+    "rxdb": "^15.39.0"
+  },
+  "peerDependencies": {
+    "rxdb": "^15.39.0"
   }
 }

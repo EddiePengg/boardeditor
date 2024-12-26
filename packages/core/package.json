@@ -2,21 +2,33 @@
   "name": "@boardeditor/core",
   "version": "0.0.1",
   "description": "",
-  "main": "src/index.ts",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build:ts": "tsc --distDir dist",
-    "build": "tsc && rollup -c rollup.config.js"
+    "build": "rollup -c rollup.config.js"
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "pixi.js": "^8.5.2",
-    "rxdb": "^15.37.0",
-    "@boardeditor/model": "file:../model"
-  },
   "devDependencies": {
-    "@types/node": "^22.9.0"
+    "@boardeditor/model": "workspace:*",
+    "@types/node": "^22.9.0",
+    "dayjs": "^1.11.13",
+    "nanoid": "^5.0.9",
+    "pixi.js": "^8.6.4",
+    "rxdb": "^15.39.0"
+  },
+  "peerDependencies": {
+    "@boardeditor/model": "workspace:*",
+    "dayjs": "^1.11.13",
+    "nanoid": "^5.0.9",
+    "pixi.js": "^8.6.4",
+    "rxdb": "^15.39.0"
   }
 }

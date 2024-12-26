@@ -1,17 +1,22 @@
-import { Container, Graphics, Application, TextStyleOptions } from "pixi.js";
+import { Container, Graphics, Application, TextStyle, Text } from "pixi.js";
+import dayjs from "dayjs";
 
-import { CardDraggableManager } from "./managers/CardDraggableManager.js";
+import { CardDraggableManager } from "./managers/CardDraggableManager";
 import { RxDocument } from "rxdb";
 import { CardDocument } from "@boardeditor/model";
-import { EditableText } from "./EditableText.js";
-import { ArrowManager } from "../managers/ArrowManager.js";
-import { Whiteboard } from "../Whiteboard/index.js";
-import { GestureManager } from "../managers/index.js";
+import { EditableText } from "./EditableText";
+import { ArrowManager } from "../managers/ArrowManager";
+import { Whiteboard } from "../Whiteboard/index";
+import { GestureManager } from "../managers/index";
 
 export class Card extends Container {
   public background!: Graphics; // 卡片的背景图形，也是用于判定的判定点
 
   public textField!: EditableText; // 卡片的文本内容
+
+  private tagsContainer!: Container; // 标签容器
+
+  private timeText!: Text; // 时间显示组件
 
   public whiteboard: Whiteboard;
 
@@ -23,9 +28,9 @@ export class Card extends Container {
 
   private rxDocument?: RxDocument<CardDocument>;
 
-  private parentCardRef?: Card | null = null; // 一个卡片只能有一个父卡片
+  private parentCardRef?: Card | null = null;
 
-  public childrenCardRef: Card[] = []; // 一个卡片可以有多个子卡片
+  public childrenCardRef: Card[] = [];
 
   private selected: boolean = false; // 卡片是否被选中
 
@@ -36,12 +41,43 @@ export class Card extends Container {
 
   private readonly cardWidth: number = 300;
 
+  // 标签相关配置
+  private readonly tagPadding: number = 8; // 标签内部的padding
+  private readonly tagGap: number = 8; // 标签之间的间距
+  private readonly tagHeight: number = 24; // 标签的高度
+  private readonly tagBorderRadius: number = 4; // 标签的圆角半径，改小一点
+  private readonly tagBottomGap: number = 8; // 标签与卡片底部的间距
+
+  // 标签颜色配置
+  private readonly tagColors: number[] = [
+    0xffcdd2, // 浅红
+    0xf8bbd0, // 浅粉
+    0xe1bee7, // 浅紫
+    0xd1c4e9, // 浅靛
+    0xbbdefb, // 浅蓝
+    0xb2ebf2, // 浅青
+    0xb2dfdb, // 浅绿
+    0xdcedc8, // 浅黄绿
+    0xf0f4c3, // 浅黄
+    0xffecb3, // 浅橙
+  ];
+
+  // 标签文字颜色
+  private readonly tagTextColors: number[] = [
+    0x333333, // 深灰色文字
+  ];
+
+  // 时间显示相关配置
+  private readonly timeTextStyle: Partial<TextStyle> = {
+    fontSize: 12,
+    fill: 0x999999,
+  };
+
   constructor(
     whiteboard: Whiteboard,
-    text: string,
+    rxDocument?: RxDocument<CardDocument>,
     options?: {
       minHeight?: number;
-      rxDocument?: RxDocument<CardDocument>;
     }
   ) {
     super();
@@ -49,16 +85,18 @@ export class Card extends Container {
     this.whiteboard = whiteboard;
     this.app = whiteboard.app;
     this.minHeight = options?.minHeight ?? 200;
-    this.rxDocument = options?.rxDocument;
+    this.rxDocument = rxDocument;
 
-    this.initializeComponents(text);
+    this.initializeComponents(this.rxDocument?.text ?? "Untitled");
     this.initializeEvents();
     this.initializeDragManager();
   }
 
   /** 初始化组件 */
   private initializeComponents(text: string): void {
+    this.createTags(); // 先创建标签，确保它在背景层下方
     this.createBackground();
+    this.createTimeText();
     this.createText(text);
     this.updateLayout();
   }
@@ -82,21 +120,46 @@ export class Card extends Container {
     this.addChild(this.background);
   }
 
+  /** 创建时间显示 */
+  private createTimeText(): void {
+    const timeString = this.formatCreatedTime();
+    this.timeText = new Text({
+      text: timeString,
+      style: this.timeTextStyle,
+    });
+    this.timeText.position.set(this.padding, this.padding / 2);
+    this.addChild(this.timeText);
+  }
+
+  /** 格式化创建时间 */
+  private formatCreatedTime(): string {
+    const createdTime = this.rxDocument?.created_time;
+    if (!createdTime) {
+      return "创建时间未知";
+    }
+
+    try {
+      return dayjs(createdTime).format("YYYY/MM/DD HH:mm");
+    } catch (error) {
+      return "时间格式错误";
+    }
+  }
+
   /** 创建文本 */
   private createText(text: string): void {
-    const style: Partial<TextStyleOptions> = {
+    const style: Partial<TextStyle> = {
       fontSize: 16,
       fill: 0x666666,
     };
     this.textField = this.createEditableText(text, style, true);
-    this.textField.position.set(this.padding, this.padding);
+    this.textField.position.set(this.padding, this.padding * 2);
     this.addChild(this.textField);
   }
 
   /** 创建可编辑文本 */
   private createEditableText(
     text: string,
-    style: Partial<TextStyleOptions>,
+    style: Partial<TextStyle>,
     isMultiline: boolean
   ): EditableText {
     const editableText = new EditableText(
@@ -115,6 +178,13 @@ export class Card extends Container {
 
   /** 更新布局 */
   private updateLayout(): void {
+    if (this.tagsContainer) {
+      this.tagsContainer.position.set(
+        this.padding,
+        Math.max(this.minHeight, this.textField.height + this.padding * 3) +
+          this.tagBottomGap
+      );
+    }
     this.drawBackground();
     this.layoutChildren();
   }
@@ -123,11 +193,13 @@ export class Card extends Container {
   private drawBackground(): void {
     const totalHeight = Math.max(
       this.minHeight,
-      this.textField.height + this.padding * 2
+      this.textField.height + this.padding * 3
     );
 
     this.background.clear();
-    this.background.rect(0, 0, this.cardWidth, totalHeight).fill(0xffffff);
+    this.background
+      .rect(0, 0, this.cardWidth, totalHeight)
+      .fill({ color: 0xffffff });
 
     if (this.selected) {
       this.background.stroke({
@@ -135,6 +207,78 @@ export class Card extends Container {
         width: 0.7,
       });
     }
+  }
+
+  /** 创建标签 */
+  private createTags(): void {
+    // 如果已存在标签容器，先移除它
+    if (this.tagsContainer) {
+      this.removeChild(this.tagsContainer);
+    }
+
+    // 创建新的标签容器
+    this.tagsContainer = new Container();
+    this.addChild(this.tagsContainer);
+
+    const tags = this.rxDocument?.tags;
+    if (!tags || tags.length === 0) return;
+
+    let currentX = 0;
+    let currentY = 0;
+    const maxWidth = this.cardWidth - this.padding * 2;
+
+    tags.forEach((tag, index) => {
+      const tagContainer = this.createTagElement(tag, index);
+
+      // 如果当前行放不下这个标签，换到下一行
+      if (currentX + tagContainer.width > maxWidth && index > 0) {
+        currentX = 0;
+        currentY += this.tagHeight + this.tagGap;
+      }
+
+      tagContainer.position.set(currentX, currentY);
+      this.tagsContainer.addChild(tagContainer);
+
+      currentX += tagContainer.width + this.tagGap;
+    });
+
+    this.tagsContainer.position.set(0, 0);
+  }
+
+  /** 创建单个标签元素 */
+  private createTagElement(tagText: string, index: number): Container {
+    const tagContainer = new Container();
+
+    // 获取标签颜色 - 循环使用颜色数组
+    const backgroundColor = this.tagColors[index % this.tagColors.length];
+    const textColor = this.tagTextColors[0]; // 使用统一的文字颜色
+
+    // 创建标签文本
+    const tagTextStyle: Partial<TextStyle> = {
+      fontSize: 12,
+      fill: textColor,
+    };
+    const text = new Text({
+      text: tagText,
+      style: tagTextStyle,
+    });
+    text.position.set(this.tagPadding, (this.tagHeight - text.height) / 2);
+
+    // 创建标签背景
+    const background = new Graphics()
+      .roundRect(
+        0,
+        0,
+        text.width + this.tagPadding * 2,
+        this.tagHeight,
+        this.tagBorderRadius
+      )
+      .fill({ color: backgroundColor });
+
+    tagContainer.addChild(background);
+    tagContainer.addChild(text);
+
+    return tagContainer;
   }
 
   /** 文本变化处理 */
@@ -153,7 +297,7 @@ export class Card extends Container {
 
   /** 添加子卡片 */
   public addChildCard(childCard: Card): void {
-    console.log("❌v0.0.1版本暂时不允许添加子卡片");
+    console.log("❌v0.0.1版本暂时不许添加子卡片");
     return;
 
     // // 如果子卡片已经是当前卡片的子元素，直接返回
@@ -232,6 +376,10 @@ export class Card extends Container {
 
   private onTap(): void {
     this.whiteboard.setSelection(this);
+  }
+
+  public async removeCard() {
+    this.whiteboard.mainContainer.removeChild(this);
   }
 
   public async deleteCard() {

@@ -1,10 +1,11 @@
 import { FederatedPointerEvent, Application, Container } from "pixi.js";
-import { Card } from "../Card.js";
-import { DraggableManager } from "../../managers/DraggableManager.js";
+import { Card } from "../Card";
+import { DraggableManager } from "../../managers/DraggableManager";
 
 export class CardDraggableManager extends DraggableManager {
   private card: Card;
   private potentialParent: Card | null = null;
+  private dragOffset = { x: 0, y: 0 };
 
   constructor(app: Application, card: Card) {
     super(app.stage, card); // 初始化基类 DraggableManager
@@ -21,14 +22,25 @@ export class CardDraggableManager extends DraggableManager {
   }
 
   /** 覆盖 dragStart，处理卡片特有的开始行为 */
-  private onCardDragStart(): void {
-    this.card.alpha = 0.5; // 拖拽时减少透明度
+  private onCardDragStart(event: FederatedPointerEvent): void {
+    this.card.alpha = 0.5;
+
+    // 计算鼠标按下时相对于卡片的偏移量
+    const localPos = this.card.parent.toLocal(event.global);
+    this.dragOffset.x = this.card.x - localPos.x;
+    this.dragOffset.y = this.card.y - localPos.y;
   }
 
   /** 覆盖 dragMove，处理卡片特有的移动行为 */
   private onCardDragMove(event: FederatedPointerEvent): void {
-    this.card.parent.toLocal(event.global, undefined, this.card.position); // 移动卡片
-    this.checkForPotentialParent(event); // 检查是否进入其他卡片的上方
+    // 考虑偏移量进行位置计算
+    const newPos = this.card.parent.toLocal(event.global);
+    this.card.position.set(
+      newPos.x + this.dragOffset.x,
+      newPos.y + this.dragOffset.y
+    );
+
+    this.checkForPotentialParent(event);
   }
 
   /** 覆盖 dragEnd，处理卡片特有的结束行为 */

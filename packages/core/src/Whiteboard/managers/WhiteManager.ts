@@ -1,152 +1,220 @@
 import * as PIXI from "pixi.js";
+import { BoxSelection } from "./BoxSelection";
 
-// 定义手势回调类型
-type GestureCallback = (event: PIXI.FederatedPointerEvent) => void;
+type GestureHandler = (event: PIXI.FederatedPointerEvent) => void;
 
-interface TouchPointData {
-  pointerId: number;
-  position: PIXI.Point;
+interface ScrollState {
+  velocity: { x: number; y: number };
+  lastTime: number;
+  animationId: number | null;
+  friction: number;
+  minVelocity: number;
 }
 
-export default class WhiteBoardManager {
-  private isDragging: boolean = false;
-  private isZooming: boolean = false;
-  private lastPosition: { x: number; y: number } | null = null;
+interface TouchPoint {
+  id: number;
+  pos: PIXI.Point;
+}
 
-  private touchPoints: Map<number, TouchPointData> = new Map(); // 双指缩放使用
+export class WhiteBoardManager {
+  private isPanning: boolean = false;
+  private isPinching: boolean = false;
+  private lastPanPosition: { x: number; y: number } | null = null;
+  protected readonly boxSelection: BoxSelection;
 
-  private zoomFactor: number = 1; // 当前缩放因子
-  private minZoom: number = 0.25; // 最小缩放比例
-  private maxZoom: number = 2.5; // 最大缩放比例
-  private pinchStartDistance: number = 0; // 初始捏合时两个触摸点之间的距离
-  private lastDistance: number = 0; // 上一次计算的距离
-  private lastUpdateTime: number = performance.now(); // 上一次缩放的时间
+  private scrollState: ScrollState = {
+    velocity: { x: 0, y: 0 },
+    lastTime: 0,
+    animationId: null,
+    friction: 0.96,
+    minVelocity: 0.01,
+  };
 
-  private readonly doubleTapThreshold: number;
+  private touchPoints: Map<number, TouchPoint> = new Map();
+
+  private scale: number = 1;
+  private readonly minScale: number = 0.25;
+  private readonly maxScale: number = 2.5;
+  private pinchDistance: number = 0;
+  private lastPinchDistance: number = 0;
+  private lastPinchTime: number = performance.now();
+
+  private readonly doubleTapDelay: number;
   private lastTapTime: number = 0;
-  private onDoubleTapCallback?: GestureCallback;
-  private keydownsHandler!: { [key: string]: (event: KeyboardEvent) => void };
+  private onDoubleTap?: GestureHandler;
+  private keyboardHandlers!: { [key: string]: (event: KeyboardEvent) => void };
 
   constructor(
     private app: PIXI.Application,
-    private mainContainer: PIXI.Container,
-    doubleTapThreshold: number = 200
+    private container: PIXI.Container,
+    doubleTapDelay: number = 200
   ) {
-    this.doubleTapThreshold = doubleTapThreshold;
-    this.initEvents();
+    this.doubleTapDelay = doubleTapDelay;
+    this.boxSelection = new BoxSelection(this.app.stage, this.container);
+    this.setupEventListeners();
   }
 
-  public setOnDoubleTapCallback(callback: GestureCallback): void {
-    this.onDoubleTapCallback = callback;
+  private setupEventListeners(): void {
+    const stage = this.app.stage;
+    stage.on("pointerdown", this.onPointerDown.bind(this));
+    stage.on("pointermove", this.onPointerMove.bind(this));
+    stage.on("pointerup", this.onPointerUp.bind(this));
+    stage.on("pointerupoutside", this.onPointerUp.bind(this));
+    stage.on("pointertap", this.onPointerTap.bind(this));
+
+    window.addEventListener("keydown", this.onKeyDown.bind(this));
+    this.app.canvas.addEventListener("wheel", this.onWheel.bind(this), {
+      passive: false,
+    });
   }
 
-  public setKeyDownsHandler(keydownsHandler: {
-    [key: string]: (event: KeyboardEvent) => void;
-  }): void {
-    this.keydownsHandler = keydownsHandler;
+  private onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const isPinchGesture = e.ctrlKey && Math.abs(e.deltaY) < 10;
+
+    if (e.ctrlKey) {
+      this.handleZoom(e, isPinchGesture);
+    } else {
+      this.moveCanvas(-e.deltaX, -e.deltaY);
+    }
   }
 
-  private initEvents(): void {
-    this.app.stage.on("pointerdown", this.handlePointerDown.bind(this));
-    this.app.stage.on("pointermove", this.handlePointerMove.bind(this));
-    this.app.stage.on("pointerup", this.handlePointerUp.bind(this));
-    // this.app.stage.on("pointerout", this.handlePointerUp.bind(this));
-    // this.app.stage.on("pointercalcel", this.handlePointerUp.bind(this));
-    // this.app.stage.on("pointercancel", () => {
-    //   console.log("cancel");
-    // });
-    this.app.stage.on("pointertap", this.handlePointerTap.bind(this));
-    window.addEventListener("keydown", this.handleKeyDown.bind(this));
+  private handleZoom(e: WheelEvent, isPinchGesture: boolean): void {
+    const canvas = this.app.canvas;
+    const zoomSpeed = isPinchGesture ? 0.028 : 0.0012;
+    let newScale = this.scale * (1 - e.deltaY * zoomSpeed);
+    newScale = Math.min(Math.max(newScale, this.minScale), this.maxScale);
+
+    const mousePos = {
+      x: e.clientX - canvas.getBoundingClientRect().left,
+      y: e.clientY - canvas.getBoundingClientRect().top,
+    };
+
+    const beforeZoomPos = {
+      x: (mousePos.x - this.container.x) / this.scale,
+      y: (mousePos.y - this.container.y) / this.scale,
+    };
+
+    this.container.scale.set(newScale);
+
+    this.container.x = mousePos.x - beforeZoomPos.x * newScale;
+    this.container.y = mousePos.y - beforeZoomPos.y * newScale;
+
+    this.scale = newScale;
   }
 
-  private handlePointerDown(event: PIXI.FederatedPointerEvent): void {
+  private moveCanvas(dx: number, dy: number): void {
+    const moveSpeed = 1;
+    this.container.x += dx * moveSpeed;
+    this.container.y += dy * moveSpeed;
+  }
+
+  private onPointerDown(event: PIXI.FederatedPointerEvent): void {
     if (event.pointerType === "touch") {
-      // 触摸输入
-      if (!this.touchPoints.has(event.pointerId)) {
-        this.touchPoints.set(event.pointerId, {
-          pointerId: event.pointerId,
-          position: event.global.clone(),
-        });
-      }
-      if (this.touchPoints.size === 1) {
-        // 开始拖动
-        this.startDragging(event);
-      } else if (this.touchPoints.size === 2) {
-        // 如果正在拖动，停止拖动
-        this.isDragging = false;
-        this.isZooming = true;
-        this.pinchStartDistance = 0; // 重置捏合起始距离
-        this.lastDistance = 0;
-      }
+      this.handleTouchStart(event);
     } else if (event.pointerType === "mouse") {
-      // 鼠标输入，只响应右键
-      if (event.button === 2) {
-        this.startDragging(event);
-      }
+      this.handleMouseDown(event);
     }
   }
 
-  private handlePointerMove(event: PIXI.FederatedPointerEvent): void {
-    if (event.pointerType === "touch") {
-      if (this.touchPoints.has(event.pointerId)) {
-        this.touchPoints.set(event.pointerId, {
-          pointerId: event.pointerId,
-          position: event.global.clone(),
-        });
-      }
+  private handleTouchStart(event: PIXI.FederatedPointerEvent): void {
+    if (!this.touchPoints.has(event.pointerId)) {
+      this.touchPoints.set(event.pointerId, {
+        id: event.pointerId,
+        pos: event.global.clone(),
+      });
+    }
 
-      if (this.isZooming) {
-        this.handlePinchZoom();
-      } else if (this.isDragging) {
-        this.onDragMove(event);
-      }
+    if (this.touchPoints.size === 1) {
+      this.startPanning(event);
+    } else if (this.touchPoints.size === 2) {
+      this.isPanning = false;
+      this.isPinching = true;
+      this.pinchDistance = 0;
+      this.lastPinchDistance = 0;
+    }
+  }
+
+  private handleMouseDown(event: PIXI.FederatedPointerEvent): void {
+    if (event.button === 0) {
+      this.boxSelection.onPointerDown(event.global);
+    } else if (event.button === 2) {
+      this.startPanning(event);
+    }
+  }
+
+  private onPointerMove(event: PIXI.FederatedPointerEvent): void {
+    if (event.pointerType === "touch") {
+      this.handleTouchMove(event);
     } else if (event.pointerType === "mouse") {
-      if (this.isDragging) {
-        this.onDragMove(event);
-      }
+      this.handleMouseMove(event);
     }
   }
 
-  private handlePointerUp(event: PIXI.FederatedPointerEvent): void {
+  private handleTouchMove(event: PIXI.FederatedPointerEvent): void {
+    if (this.touchPoints.has(event.pointerId)) {
+      this.touchPoints.set(event.pointerId, {
+        id: event.pointerId,
+        pos: event.global.clone(),
+      });
+    }
+
+    if (this.isPinching) {
+      this.updatePinchZoom();
+    } else if (this.isPanning) {
+      this.updatePanning(event);
+    }
+  }
+
+  private handleMouseMove(event: PIXI.FederatedPointerEvent): void {
+    if (this.isPanning) {
+      this.updatePanning(event);
+    } else if (this.boxSelection.isActive()) {
+      this.boxSelection.onPointerMove(event.global);
+    }
+  }
+
+  private onPointerUp(event: PIXI.FederatedPointerEvent): void {
     if (event.pointerType === "touch") {
-      if (this.touchPoints.has(event.pointerId)) {
-        this.touchPoints.delete(event.pointerId);
-      }
-      if (this.touchPoints.size < 2) {
-        this.isZooming = false;
-        this.pinchStartDistance = 0;
-        this.lastDistance = 0;
-      }
+      this.handleTouchEnd(event);
     }
 
-    if (this.isDragging) {
-      this.onDragEnd();
+    if (this.isPanning) {
+      this.stopPanning();
+    } else if (this.boxSelection.isActive()) {
+      this.boxSelection.onPointerUp();
     }
   }
 
-  private handlePointerTap(event: PIXI.FederatedPointerEvent): void {
-    if (event.pointerType === "touch" && event.isPrimary === false) return;
+  private handleTouchEnd(event: PIXI.FederatedPointerEvent): void {
+    this.touchPoints.delete(event.pointerId);
+    if (this.touchPoints.size < 2) {
+      this.isPinching = false;
+      this.pinchDistance = 0;
+      this.lastPinchDistance = 0;
+    }
+  }
 
-    const currentTime = Date.now();
-    if (currentTime - this.lastTapTime < this.doubleTapThreshold) {
-      if (this.onDoubleTapCallback) {
-        // console.log(currentTime - this.lastTapTime);
-        this.onDoubleTapCallback(event);
-      } else {
+  private onPointerTap(event: PIXI.FederatedPointerEvent): void {
+    if (event.pointerType === "touch" && !event.isPrimary) return;
+
+    const now = Date.now();
+    if (now - this.lastTapTime < this.doubleTapDelay) {
+      if (this.onDoubleTap) {
+        this.onDoubleTap(event);
       }
       this.lastTapTime = 0;
     } else {
-      this.lastTapTime = currentTime;
-      setTimeout(() => (this.lastTapTime = 0), this.doubleTapThreshold);
+      this.lastTapTime = now;
+      setTimeout(() => (this.lastTapTime = 0), this.doubleTapDelay);
     }
   }
 
-  private startDragging(event: PIXI.FederatedPointerEvent): void {
-    if (this.isDragging) {
-      return;
-    }
-    this.isDragging = true;
-    this.lastPosition = {
+  private startPanning(event: PIXI.FederatedPointerEvent): void {
+    if (this.isPanning) return;
+
+    this.isPanning = true;
+    this.lastPanPosition = {
       x: event.globalX,
       y: event.globalY,
     };
@@ -156,117 +224,135 @@ export default class WhiteBoardManager {
     }
   }
 
-  private onDragMove(event: PIXI.FederatedPointerEvent): void {
+  private updatePanning(event: PIXI.FederatedPointerEvent): void {
     if (
-      !this.isDragging ||
-      !this.lastPosition ||
+      !this.isPanning ||
+      !this.lastPanPosition ||
       !event.isPrimary ||
-      this.isZooming
+      this.isPinching
     ) {
       return;
     }
 
-    const dx = event.globalX - this.lastPosition.x;
-    const dy = event.globalY - this.lastPosition.y;
+    const now = performance.now();
+    const deltaTime = now - this.scrollState.lastTime;
 
-    this.mainContainer.x += dx;
-    this.mainContainer.y += dy;
+    const dx = event.globalX - this.lastPanPosition.x;
+    const dy = event.globalY - this.lastPanPosition.y;
 
-    this.lastPosition = {
+    if (deltaTime > 0) {
+      this.scrollState.velocity = {
+        x: dx / deltaTime,
+        y: dy / deltaTime,
+      };
+    }
+
+    this.moveCanvas(dx, dy);
+
+    this.lastPanPosition = {
       x: event.globalX,
       y: event.globalY,
     };
+    this.scrollState.lastTime = now;
   }
 
-  private onDragEnd(): void {
-    this.isDragging = false;
-    this.lastPosition = null;
+  private stopPanning(): void {
+    this.isPanning = false;
+    this.lastPanPosition = null;
     this.app.stage.cursor = "default";
+
+    if (
+      Math.abs(this.scrollState.velocity.x) > this.scrollState.minVelocity ||
+      Math.abs(this.scrollState.velocity.y) > this.scrollState.minVelocity
+    ) {
+      this.startScrollAnimation();
+    }
   }
 
-  private handlePinchZoom(): void {
-    // 获取两个触摸点
-    const touchPointsArray = Array.from(this.touchPoints.values());
-    if (touchPointsArray.length < 2) {
-      return;
-    }
-    const touch1 = touchPointsArray[0];
-    const touch2 = touchPointsArray[1];
-
-    // 使用时间间隔来控制更新频率
-    const currentTime = performance.now();
-    if (currentTime - this.lastUpdateTime < 5) {
-      return; // 小于 5ms，跳过本次更新
-    }
-    this.lastUpdateTime = currentTime;
-
-    // 计算当前触摸点之间的距离
-    const newDistance = this.calculateDistance(touch1, touch2);
-
-    // 如果 pinchStartDistance 还没有定义，初始化该值
-    if (this.pinchStartDistance === 0) {
-      this.pinchStartDistance = newDistance;
-      this.lastDistance = newDistance;
-      return;
+  private startScrollAnimation(): void {
+    if (this.scrollState.animationId !== null) {
+      cancelAnimationFrame(this.scrollState.animationId);
     }
 
-    const distanceChange = Math.abs(newDistance - this.lastDistance);
+    const animate = () => {
+      this.scrollState.velocity.x *= this.scrollState.friction;
+      this.scrollState.velocity.y *= this.scrollState.friction;
 
-    // 忽略微小的距离变化，防止过度缩放
-    if (distanceChange < 5) {
-      return; // 如果触摸点之间的距离变化小于 5 像素，则不做处理
-    }
+      this.moveCanvas(this.scrollState.velocity.x, this.scrollState.velocity.y);
 
-    // 过滤掉大的噪音
-    if (distanceChange > 50) {
-      console.log(
-        `❌过滤噪音：newDistance(${newDistance}) ，lastDistance：${this.lastDistance}`
-      );
-      return; // 如果差距太大，忽略这次更新
-    }
+      if (
+        Math.abs(this.scrollState.velocity.x) < this.scrollState.minVelocity &&
+        Math.abs(this.scrollState.velocity.y) < this.scrollState.minVelocity
+      ) {
+        if (this.scrollState.animationId !== null) {
+          cancelAnimationFrame(this.scrollState.animationId);
+          this.scrollState.animationId = null;
+        }
+        return;
+      }
 
-    // 计算缩放因子的变化
-    const zoomFactor = newDistance / this.pinchStartDistance;
-    let newZoomFactor = this.zoomFactor * zoomFactor;
+      this.scrollState.animationId = requestAnimationFrame(animate);
+    };
 
-    // 限制缩放范围
-    newZoomFactor = Math.min(
-      Math.max(newZoomFactor, this.minZoom),
-      this.maxZoom
-    );
+    this.scrollState.animationId = requestAnimationFrame(animate);
+  }
 
-    // 如果计算的 zoomFactor 是 NaN，直接返回
-    if (isNaN(newZoomFactor)) {
-      console.error("缩放因子计算结果为 NaN，跳过更新");
+  private updatePinchZoom(): void {
+    const points = Array.from(this.touchPoints.values());
+    if (points.length < 2) return;
+
+    const now = performance.now();
+    if (now - this.lastPinchTime < 5) return;
+    this.lastPinchTime = now;
+
+    const newDistance = this.getDistance(points[0], points[1]);
+
+    if (this.pinchDistance === 0) {
+      this.pinchDistance = newDistance;
+      this.lastPinchDistance = newDistance;
       return;
     }
 
-    // 更新目标容器的缩放
-    this.mainContainer.scale.set(newZoomFactor);
+    const distanceDelta = Math.abs(newDistance - this.lastPinchDistance);
+    if (distanceDelta < 5 || distanceDelta > 50) return;
 
-    // 更新当前的缩放因子
-    this.zoomFactor = newZoomFactor;
+    const scaleFactor = newDistance / this.pinchDistance;
+    let newScale = this.scale * scaleFactor;
+    newScale = Math.min(Math.max(newScale, this.minScale), this.maxScale);
 
-    // 更新上次计算的距离
-    this.lastDistance = newDistance;
-    this.pinchStartDistance = newDistance;
+    if (isNaN(newScale)) return;
+
+    this.container.scale.set(newScale);
+    this.scale = newScale;
+    this.lastPinchDistance = newDistance;
+    this.pinchDistance = newDistance;
   }
 
-  private calculateDistance(
-    touch1: TouchPointData,
-    touch2: TouchPointData
-  ): number {
-    const t1 = touch1.position;
-    const t2 = touch2.position;
-
-    return Math.sqrt(Math.pow(t1.x - t2.x, 2) + Math.pow(t1.y - t2.y, 2));
+  private getDistance(p1: TouchPoint, p2: TouchPoint): number {
+    const dx = p1.pos.x - p2.pos.x;
+    const dy = p1.pos.y - p2.pos.y;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private handleKeyDown(event: KeyboardEvent): void {
-    if (!this.keydownsHandler) return;
-    const handler = this.keydownsHandler[event.key];
+  private onKeyDown(event: KeyboardEvent): void {
+    if (!this.keyboardHandlers) return;
+    const handler = this.keyboardHandlers[event.key];
     if (handler) {
       handler(event);
     }
+  }
+
+  public setDoubleTapHandler(handler: GestureHandler): void {
+    this.onDoubleTap = handler;
+  }
+
+  public setKeyboardHandlers(handlers: {
+    [key: string]: (event: KeyboardEvent) => void;
+  }): void {
+    this.keyboardHandlers = handlers;
+  }
+
+  public getBoxSelection(): BoxSelection {
+    return this.boxSelection;
   }
 }

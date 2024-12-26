@@ -1,6 +1,6 @@
 import { Text } from "pixi.js";
 import * as PIXI from "pixi.js";
-import { GestureManager } from "../managers/GestureManager.js";
+import { GestureManager } from "../managers/GestureManager";
 
 export class EditableText extends Text {
   private app: PIXI.Application;

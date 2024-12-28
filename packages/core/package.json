@@ -7,28 +7,28 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build:ts": "tsc --distDir dist",
-    "build": "rollup -c rollup.config.js"
+    "build": "node esbuild.js && tsc",
+    "dev": "node esbuild.js --watch"
   },
   "files": [
     "dist",
-    "src"
+    "src",
+    "bundle"
   ],
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "@boardeditor/model": "workspace:*",
-    "@types/node": "^22.9.0",
+  "dependencies": {
     "dayjs": "^1.11.13",
     "nanoid": "^5.0.9",
     "pixi.js": "^8.6.4",
     "rxdb": "^15.39.0"
   },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "@boardeditor/model": "workspace:*"
+  },
   "peerDependencies": {
-    "@boardeditor/model": "workspace:*",
-    "dayjs": "^1.11.13",
-    "nanoid": "^5.0.9",
-    "pixi.js": "^8.6.4",
-    "rxdb": "^15.39.0"
+    "@boardeditor/model": "workspace:*"
   }
 }

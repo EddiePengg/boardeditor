@@ -2,17 +2,17 @@
   "name": "@boardeditor/layout",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/index.js",
+  "main": "bundle/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "src"
+    "src",
+    "bundle"
   ],
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rollup -c",
-    "dev": "rollup -c -w"
+    "build": "node esbuild.js && tsc"
   },
   "keywords": [],
   "author": "",

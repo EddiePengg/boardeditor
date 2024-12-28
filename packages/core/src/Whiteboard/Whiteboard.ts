@@ -1,6 +1,7 @@
-import { Application, Container } from "pixi.js";
+import { Application, Container, FederatedPointerEvent } from "pixi.js";
 import { WhiteBoardManager } from "./managers/WhiteManager";
-import { Card } from "../Card/index";
+import { Card } from "../Card";
+import { UIOverlayManager } from "../managers/UIOverlayManager";
 
 export interface WhiteboardConfig {
   backgroundColor: string;
@@ -14,6 +15,7 @@ export class Whiteboard implements Whiteboard {
   public readonly mainContainer: Container; // 无限画布的主要容器，所有元素都在这个容器之下。
   protected whiteManager!: WhiteBoardManager;
   protected readonly config: WhiteboardConfig;
+  private uiManager: UIOverlayManager | null = null;
 
   constructor(
     config: WhiteboardConfig = {
@@ -49,6 +51,14 @@ export class Whiteboard implements Whiteboard {
     this.app.canvas.addEventListener("contextmenu", (e: Event) =>
       e.preventDefault()
     );
+
+    // 监听画布变换事件，更新UI位置
+    this.app.stage.on("transformed", () => {
+      if (this.uiManager) {
+        console.log("Updating UI position due to canvas transform");
+        this.uiManager.updatePosition();
+      }
+    });
   }
 
   protected initializeManagers(): void {
@@ -100,5 +110,29 @@ export class Whiteboard implements Whiteboard {
         child.removeCard();
       }
     });
+  }
+
+  public showCardToolbar(event: FederatedPointerEvent, card: Card): void {
+    if (!this.uiManager) return;
+
+    this.uiManager.showToolbar(event, card);
+  }
+
+  /**
+   * 在canvas被添加到DOM后调用此方法初始化UI
+   */
+  public initializeUI(): void {
+    if (!this.app.canvas.parentElement) {
+      console.error("Cannot initialize UI: Canvas is not in DOM");
+      return;
+    }
+    console.log("Initializing UI manager after canvas added to DOM");
+    this.uiManager = new UIOverlayManager(this.app);
+  }
+
+  public showContextMenu(event: FederatedPointerEvent, card: Card): void {
+    if (this.uiManager) {
+      this.uiManager.showContextMenu(event, card);
+    }
   }
 }

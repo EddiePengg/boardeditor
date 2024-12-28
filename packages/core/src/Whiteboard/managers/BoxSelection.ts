@@ -1,4 +1,6 @@
 import * as PIXI from "pixi.js";
+import { FederatedEventTarget } from "pixi.js";
+import { Card } from "../../Card/Card";
 
 export class BoxSelection {
   private selectionBox: PIXI.Graphics;
@@ -12,6 +14,7 @@ export class BoxSelection {
   // 拖拽状态
   private isDragging: boolean = false;
   private dragStartPoint: PIXI.Point | null = null;
+  private dragStartPositions: Map<PIXI.Container, PIXI.Point> = new Map();
 
   constructor(
     private stage: PIXI.Container,
@@ -21,23 +24,47 @@ export class BoxSelection {
     this.mainContainer.addChild(this.selectionBox);
   }
 
-  public onPointerDown(point: PIXI.Point): void {
+  public onPointerDown(point: PIXI.Point, target: FederatedEventTarget): void {
     // 将全局坐标转换为相对于 mainContainer 的本地坐标
     const localPoint = this.selectionBox.parent.toLocal(point);
 
-    // 如果点击在选区内，开始拖拽
-    if (this.bounds?.contains(localPoint.x, localPoint.y)) {
+    // 检查是否点击了已选中的元素
+    if (this.isTargetSelected(target)) {
       this.startDrag(localPoint);
       return;
     }
 
-    // 否则开始新的框选
-    this.startDraw(localPoint);
+    // 如果点击的是卡片元素
+    if (target instanceof Card) {
+      this.clear();
+      this.selectedElements.add(target);
+      target.onTap();
+      this.startDrag(localPoint);
+      return;
+    }
+
+    // 如果点击的是主容器，开始框选
+    if (target === this.stage || target === this.mainContainer) {
+      this.startDraw(localPoint);
+      return;
+    }
+  }
+
+  private isTargetSelected(target: FederatedEventTarget): boolean {
+    // 检查目标是否是选中框
+    if (target === this.selectionBox) {
+      return true;
+    }
+
+    // 检查目标是否在已选中的元素中
+    return Array.from(this.selectedElements).some((element) => {
+      return target === element || (target as any).parent === element;
+    });
   }
 
   public onPointerMove(point: PIXI.Point): void {
     // 将全局坐标转换为相对于 mainContainer 的本地坐标
-    const localPoint = this.selectionBox.parent.toLocal(point);
+    const localPoint = this.mainContainer.toLocal(point);
 
     if (this.isDragging) {
       this.updateDrag(localPoint);
@@ -46,12 +73,43 @@ export class BoxSelection {
     }
   }
 
-  public onPointerUp(): void {
-    if (this.isDragging) {
-      this.endDrag();
-    } else if (this.isDrawing) {
-      this.endDraw();
+  private startDrag(point: PIXI.Point): void {
+    this.isDragging = true;
+    this.dragStartPoint = point.clone();
+
+    // 记录所有选中元素的初始位置
+    this.dragStartPositions.clear();
+    this.selectedElements.forEach((element) => {
+      this.dragStartPositions.set(element, element.position.clone());
+    });
+  }
+
+  private updateDrag(point: PIXI.Point): void {
+    if (!this.dragStartPoint) return;
+
+    const dx = point.x - this.dragStartPoint.x;
+    const dy = point.y - this.dragStartPoint.y;
+
+    // 更新所有选中元素的位置
+    this.selectedElements.forEach((element) => {
+      const startPos = this.dragStartPositions.get(element);
+      if (startPos) {
+        element.position.set(startPos.x + dx, startPos.y + dy);
+      }
+    });
+
+    // 如果有选择框，也要更新它的位置
+    if (this.bounds) {
+      this.bounds.x += dx;
+      this.bounds.y += dy;
+      this.drawBox(this.bounds, false);
     }
+  }
+
+  private endDrag(): void {
+    this.isDragging = false;
+    this.dragStartPoint = null;
+    this.dragStartPositions.clear();
   }
 
   private startDraw(point: PIXI.Point): void {
@@ -75,52 +133,12 @@ export class BoxSelection {
     if (this.bounds) {
       this.findIntersectingElements();
 
-      console.log("selectedElements", this.selectedElements);
-
-      if (this.selectedElements.size === 1) {
+      if (this.selectedElements.size === 0) {
         this.clear();
       } else {
         this.drawBox(this.bounds, false);
       }
     }
-  }
-
-  private startDrag(point: PIXI.Point): void {
-    this.isDragging = true;
-    this.dragStartPoint = point.clone();
-  }
-
-  private updateDrag(point: PIXI.Point): void {
-    if (!this.dragStartPoint || !this.bounds) return;
-
-    const offset = {
-      x: point.x - this.dragStartPoint.x,
-      y: point.y - this.dragStartPoint.y,
-    };
-
-    // 移动选框
-    // this.selectionBox.position.set(
-    //   this.selectionBox.position.x + offset.x,
-    //   this.selectionBox.position.y + offset.y
-    // );
-
-    // 移动选中的元素
-    this.selectedElements.forEach((element) => {
-      element.position.set(
-        element.position.x + offset.x,
-        element.position.y + offset.y
-      );
-    });
-
-    // 更新边界和起始点
-    this.bounds.x += offset.x;
-    this.bounds.y += offset.y;
-    this.dragStartPoint = point.clone();
-  }
-
-  private endDrag(): void {
-    this.isDragging = false;
-    this.dragStartPoint = null;
   }
 
   private calculateBounds(start: PIXI.Point, end: PIXI.Point): PIXI.Rectangle {
@@ -229,6 +247,14 @@ export class BoxSelection {
       ) {
         element.setSelected(true);
       }
+    }
+  }
+
+  public onPointerUp(): void {
+    if (this.isDragging) {
+      this.endDrag();
+    } else if (this.isDrawing) {
+      this.endDraw();
     }
   }
 }

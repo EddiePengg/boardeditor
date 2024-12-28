@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.0.3] - 2024-12-28
+
+### Changed
+
+- 优化编辑逻辑，双击 EditableText 经常误触，改为双击卡片进行内容的修改
+- 手指触摸卡片时不会触发拖动卡片，而是 Panning 屏幕（拖动卡片遵循移动端 0.25s 逻辑）
+
+### Added
+
+- 新增 UiOverlayManager，用于管理 UI 元素的显示和隐藏
+- 使用 esbuild 进行打包，优化打包速度
+- 添加触摸板双指拖动功能。
+- 实现简易工具栏
+- 实现简易组件栏
+- 实现简易右键菜单
+- 实现触摸 0.25s 逻辑
+
+### Refactor
+
+- 重构 GestureManager 为 ClickEventManager
+- 重构拖动部分，是针对选中元素添加拖动事件进行拖动而不是针对单一元素，使用 WhiteManager 统一管理（事件委托）
+
+### Removed
+
+- 移除 CardDraggableManager，改为统一使用 BoxSelection 实现拖动
+
 ## [0.0.2] - 2024-12-26
 
 ### Added

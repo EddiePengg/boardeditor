@@ -1,3 +1,4 @@
 import { Card } from "./Card";
+import { EditableText } from "./EditableText";
 
-export { Card };
+export { Card, EditableText };

@@ -1,5 +1,6 @@
 import * as PIXI from "pixi.js";
 import { BoxSelection } from "./BoxSelection";
+import { FederatedEventTarget } from "pixi.js";
 
 type GestureHandler = (event: PIXI.FederatedPointerEvent) => void;
 
@@ -17,10 +18,16 @@ interface TouchPoint {
 }
 
 export class WhiteBoardManager {
-  private isPanning: boolean = false;
-  private isPinching: boolean = false;
+  private isTouchPanning: boolean = false; // 触摸拖动
+  private isMousePanning: boolean = false; // 鼠标拖动
+  private isTouchPinching: boolean = false; // 触摸捏合
   private lastPanPosition: { x: number; y: number } | null = null;
   protected readonly boxSelection: BoxSelection;
+
+  // 添加长按相关的状态
+  private touchHoldTimer: number | null = null;
+  private readonly touchHoldDelay: number = 250; // 0.25秒的长按判定
+  private isTouchHolding: boolean = false;
 
   private scrollState: ScrollState = {
     velocity: { x: 0, y: 0 },
@@ -63,6 +70,7 @@ export class WhiteBoardManager {
     stage.on("pointertap", this.onPointerTap.bind(this));
 
     window.addEventListener("keydown", this.onKeyDown.bind(this));
+
     this.app.canvas.addEventListener("wheel", this.onWheel.bind(this), {
       passive: false,
     });
@@ -70,7 +78,7 @@ export class WhiteBoardManager {
 
   private onWheel(e: WheelEvent): void {
     e.preventDefault();
-    const isPinchGesture = e.ctrlKey && Math.abs(e.deltaY) < 10;
+    const isPinchGesture = e.ctrlKey && Math.abs(e.deltaY) < 10; // 区别双指捏合和双指上下移动
 
     if (e.ctrlKey) {
       this.handleZoom(e, isPinchGesture);
@@ -125,21 +133,52 @@ export class WhiteBoardManager {
       });
     }
 
+    // 开始长按计时
     if (this.touchPoints.size === 1) {
-      this.startPanning(event);
+      this.startTouchHoldTimer(event);
     } else if (this.touchPoints.size === 2) {
-      this.isPanning = false;
-      this.isPinching = true;
+      // 如果是双指操作，清除长按计时器
+      this.clearTouchHoldTimer();
+      this.isTouchPinching = true;
       this.pinchDistance = 0;
       this.lastPinchDistance = 0;
     }
   }
 
+  private startTouchHoldTimer(event: PIXI.FederatedPointerEvent): void {
+    this.clearTouchHoldTimer();
+    this.isTouchHolding = false;
+
+    this.touchHoldTimer = window.setTimeout(() => {
+      this.isTouchHolding = true;
+      console.log("长按开始");
+      // 如果超过0.25秒，不启动画布拖拽，而是进行选择操作
+      this.isTouchPanning = false;
+      this.boxSelection.onPointerDown(
+        event.global,
+        event.target as FederatedEventTarget
+      );
+    }, this.touchHoldDelay);
+
+    // 立即启动画布拖拽，如果超时会被取消
+    this.startTouchPanning(event);
+  }
+
+  private clearTouchHoldTimer(): void {
+    if (this.touchHoldTimer !== null) {
+      clearTimeout(this.touchHoldTimer);
+      this.touchHoldTimer = null;
+    }
+  }
+
   private handleMouseDown(event: PIXI.FederatedPointerEvent): void {
     if (event.button === 0) {
-      this.boxSelection.onPointerDown(event.global);
+      this.boxSelection.onPointerDown(
+        event.global,
+        event.target as FederatedEventTarget
+      );
     } else if (event.button === 2) {
-      this.startPanning(event);
+      this.startMousePanning(event);
     }
   }
 
@@ -153,21 +192,38 @@ export class WhiteBoardManager {
 
   private handleTouchMove(event: PIXI.FederatedPointerEvent): void {
     if (this.touchPoints.has(event.pointerId)) {
+      const oldPoint = this.touchPoints.get(event.pointerId)!;
+      const newPoint = event.global.clone();
+
+      // 如果移动距离超过阈值，取消长按
+      const moveDistance = Math.sqrt(
+        Math.pow(newPoint.x - oldPoint.pos.x, 2) +
+          Math.pow(newPoint.y - oldPoint.pos.y, 2)
+      );
+
+      if (moveDistance > 5) {
+        // 5像素的移动阈值
+        this.clearTouchHoldTimer();
+      }
+
       this.touchPoints.set(event.pointerId, {
         id: event.pointerId,
-        pos: event.global.clone(),
+        pos: newPoint,
       });
     }
 
-    if (this.isPinching) {
+    if (this.isTouchPinching) {
       this.updatePinchZoom();
-    } else if (this.isPanning) {
+    } else if (this.isTouchHolding && this.boxSelection.isActive()) {
+      // 如果是长按状态且选择框处于活动状态，更新选择框
+      this.boxSelection.onPointerMove(event.global);
+    } else if (this.isTouchPanning && !this.isTouchHolding) {
       this.updatePanning(event);
     }
   }
 
   private handleMouseMove(event: PIXI.FederatedPointerEvent): void {
-    if (this.isPanning) {
+    if (this.isMousePanning) {
       this.updatePanning(event);
     } else if (this.boxSelection.isActive()) {
       this.boxSelection.onPointerMove(event.global);
@@ -177,21 +233,27 @@ export class WhiteBoardManager {
   private onPointerUp(event: PIXI.FederatedPointerEvent): void {
     if (event.pointerType === "touch") {
       this.handleTouchEnd(event);
-    }
-
-    if (this.isPanning) {
-      this.stopPanning();
-    } else if (this.boxSelection.isActive()) {
-      this.boxSelection.onPointerUp();
+    } else if (event.pointerType === "mouse") {
+      if (this.isMousePanning) {
+        this.stopMousePanning();
+      } else if (this.boxSelection.isActive()) {
+        this.boxSelection.onPointerUp();
+      }
     }
   }
 
   private handleTouchEnd(event: PIXI.FederatedPointerEvent): void {
+    this.clearTouchHoldTimer();
     this.touchPoints.delete(event.pointerId);
     if (this.touchPoints.size < 2) {
-      this.isPinching = false;
+      this.isTouchPinching = false;
       this.pinchDistance = 0;
       this.lastPinchDistance = 0;
+    }
+    if (this.touchPoints.size === 0) {
+      this.isTouchHolding = false;
+      this.stopTouchPanning();
+      this.boxSelection.onPointerUp();
     }
   }
 
@@ -210,26 +272,32 @@ export class WhiteBoardManager {
     }
   }
 
-  private startPanning(event: PIXI.FederatedPointerEvent): void {
-    if (this.isPanning) return;
+  private startTouchPanning(event: PIXI.FederatedPointerEvent): void {
+    if (this.isTouchPanning) return;
 
-    this.isPanning = true;
+    this.isTouchPanning = true;
     this.lastPanPosition = {
       x: event.globalX,
       y: event.globalY,
     };
+  }
 
-    if (event.pointerType === "mouse") {
-      this.app.stage.cursor = "grabbing";
-    }
+  private startMousePanning(event: PIXI.FederatedPointerEvent): void {
+    if (this.isMousePanning) return;
+
+    this.isMousePanning = true;
+    this.lastPanPosition = {
+      x: event.globalX,
+      y: event.globalY,
+    };
+    this.app.stage.cursor = "grabbing";
   }
 
   private updatePanning(event: PIXI.FederatedPointerEvent): void {
     if (
-      !this.isPanning ||
+      (!this.isTouchPanning && !this.isMousePanning) ||
       !this.lastPanPosition ||
-      !event.isPrimary ||
-      this.isPinching
+      !event.isPrimary
     ) {
       return;
     }
@@ -256,8 +324,20 @@ export class WhiteBoardManager {
     this.scrollState.lastTime = now;
   }
 
-  private stopPanning(): void {
-    this.isPanning = false;
+  private stopTouchPanning(): void {
+    this.isTouchPanning = false;
+    this.lastPanPosition = null;
+
+    if (
+      Math.abs(this.scrollState.velocity.x) > this.scrollState.minVelocity ||
+      Math.abs(this.scrollState.velocity.y) > this.scrollState.minVelocity
+    ) {
+      this.startScrollAnimation();
+    }
+  }
+
+  private stopMousePanning(): void {
+    this.isMousePanning = false;
     this.lastPanPosition = null;
     this.app.stage.cursor = "default";
 

@@ -1,4 +1,11 @@
-import { Container, Graphics, Application, TextStyle, Text } from "pixi.js";
+import {
+  Container,
+  Graphics,
+  Application,
+  TextStyle,
+  Text,
+  FederatedPointerEvent,
+} from "pixi.js";
 import dayjs from "dayjs";
 
 import { CardDraggableManager } from "./managers/CardDraggableManager";
@@ -7,7 +14,7 @@ import { CardDocument } from "@boardeditor/model";
 import { EditableText } from "./EditableText";
 import { ArrowManager } from "../managers/ArrowManager";
 import { Whiteboard } from "../Whiteboard/index";
-import { GestureManager } from "../managers/index";
+import { ClickEventManager } from "../managers/index";
 
 export class Card extends Container {
   public background!: Graphics; // 卡片的背景图形，也是用于判定的判定点
@@ -24,7 +31,7 @@ export class Card extends Container {
 
   private DraggableManager!: CardDraggableManager;
 
-  private GestureManager!: GestureManager;
+  private clickEventManager!: ClickEventManager;
 
   private rxDocument?: RxDocument<CardDocument>;
 
@@ -87,6 +94,8 @@ export class Card extends Container {
     this.minHeight = options?.minHeight ?? 200;
     this.rxDocument = rxDocument;
 
+    this.eventMode = "static";
+
     this.initializeComponents(this.rxDocument?.text ?? "Untitled");
     this.initializeEvents();
     this.initializeDragManager();
@@ -108,10 +117,16 @@ export class Card extends Container {
 
   /** 初始化拖拽管理器 */
   private initializeDragManager(): void {
-    this.DraggableManager = new CardDraggableManager(this.app, this);
-    this.DraggableManager.initialize();
-    this.GestureManager = new GestureManager(this);
-    this.GestureManager.setOnTapCallback(this.onTap.bind(this));
+    // this.DraggableManager = new CardDraggableManager(this.app, this);
+    // this.DraggableManager.initialize();
+    // this.clickEventManager = new ClickEventManager(this);
+    // this.clickEventManager.setOnTapCallback(this.onTap.bind(this));
+    // this.clickEventManager.setOnDoubleTapCallback((e) => {
+    //   this.textField.handleEdit(e);
+    // });
+    // this.clickEventManager.setOnRightClickCallback((e) => {
+    //   this.onRightClick(e);
+    // });
   }
 
   /** 创建背景 */
@@ -345,7 +360,6 @@ export class Card extends Container {
       // 清空子卡片的父卡片引用
       childCard.parentCardRef = null;
 
-      // 通过箭头管理器移除箭头
       ArrowManager.getInstance(this.app).removeArrow(this, childCard);
 
       // 重新调整布局
@@ -360,7 +374,7 @@ export class Card extends Container {
     let yOffset = this.padding;
 
     this.childrenCardRef.forEach((child) => {
-      // 计算子卡片相对于父卡片的位置
+      // 计算卡片相对于父卡片的位置
       // 注意：子卡片的位置是相对于父卡片的坐标系
       child.position.set(rightOffset + this.x, yOffset + this.y);
 
@@ -374,8 +388,12 @@ export class Card extends Container {
     this.drawBackground();
   }
 
-  private onTap(): void {
+  public onTap(event?: FederatedPointerEvent): void {
     this.whiteboard.setSelection(this);
+    // 显示工具栏
+    if (event) {
+      this.whiteboard.showCardToolbar(event, this);
+    }
   }
 
   public async removeCard() {
@@ -388,5 +406,10 @@ export class Card extends Container {
       $set: { in_trash: true },
     });
     this.rxDocument = newestDocumen;
+  }
+
+  private onRightClick(event: FederatedPointerEvent): void {
+    // 显示右键菜单
+    this.whiteboard.showContextMenu(event, this);
   }
 }

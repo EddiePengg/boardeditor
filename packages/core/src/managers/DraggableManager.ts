@@ -41,6 +41,8 @@ export class DraggableManager {
 
     this.stage.once("pointerup", this.onDragEnd, this);
 
+    this.stage.on("pointercancel", this.onDragEnd, this);
+
     this.setIsDragging(true);
   }
 
@@ -53,6 +55,7 @@ export class DraggableManager {
 
   /** 拖拽结束 */
   private onDragEnd(): void {
+    console.log("🔍 DraggableManager - onDragEnd");
     // 激活拖拽结束事件
     this.target.emit("dragEnd");
     this.stage.off("pointermove", this.onDragMove, this);

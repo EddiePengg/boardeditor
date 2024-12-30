@@ -18,11 +18,13 @@
     "noImplicitReturns": true, // 禁止函数没有明确返回值
     "noImplicitOverride": true, // 禁止子类覆盖父类的方法时没有使用 `override` 关键字
     "incremental": true, // 启用增量编译，减少编译时间
-    "useDefineForClassFields": false // 禁用 class 字段的 `define` 语法，避免与 TypeScript 的行为冲突
+    "useDefineForClassFields": false, // 禁用 class 字段的 `define` 语法，避免与 TypeScript 的行为冲突
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "references": [
     { "path": "packages/core" },
-    { "path": "packages/napkin" },
+    { "path": "packages/playground" },
     { "path": "packages/model" }
   ]
 }

@@ -128,7 +128,8 @@ export class EditableText extends Text {
     textElement.focus();
 
     // 处理文本编辑完成事件
-    const handleBlur = () => {
+    const handleBlur = (e: FocusEvent) => {
+      console.log("handleBlur");
       this.text = textElement.textContent || "";
       this.visible = true;
       document.body.removeChild(container);
@@ -144,9 +145,12 @@ export class EditableText extends Text {
       }
     };
 
-    // 绑定事件
-    textElement.addEventListener("blur", handleBlur);
-    textElement.addEventListener("keydown", handleKeyDown);
+    // 添加一个小延迟，避免触摸双击时立即失焦
+    setTimeout(() => {
+      // 绑定事件
+      textElement.addEventListener("blur", handleBlur);
+      textElement.addEventListener("keydown", handleKeyDown);
+    }, 100);
   }
 
   private adjustTextareaHeight(textarea: HTMLTextAreaElement) {

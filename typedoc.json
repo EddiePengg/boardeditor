@@ -6,5 +6,5 @@
   "readme": "none", // 不生成 README 文件
   "name": "Napkin API Documentation", // 文档的名称
   "hideGenerator": true, // 隐藏生成器信息（替代 hidePageHeader）
-  "exclude": ["packages/napkin/**/*"] // 排除 napkin 包
+  "exclude": ["packages/playground/**/*"] // 排除 napkin 包
 }

@@ -10,9 +10,8 @@ export interface WhiteboardConfig {
 }
 
 export class Whiteboard implements Whiteboard {
-  public readonly app: Application; // PIXI.Application
-
-  public readonly mainContainer: Container; // 无限画布的主要容器，所有元素都在这个容器之下。
+  public readonly app: Application;
+  public readonly mainContainer: Container;
   protected whiteManager!: WhiteBoardManager;
   protected readonly config: WhiteboardConfig;
   private uiManager: UIOverlayManager | null = null;
@@ -20,12 +19,12 @@ export class Whiteboard implements Whiteboard {
   constructor(
     config: WhiteboardConfig = {
       backgroundColor: "#1099bb",
-      resizeTo: window, // 画布大小默认和window一样大
+      resizeTo: window,
     }
   ) {
     this.config = config;
     this.app = new Application();
-    this.mainContainer = new Container(); // 最重要的白板容器，位于stage之下，所有渲染元素之上。
+    this.mainContainer = new Container();
   }
 
   public async initialize(): Promise<void> {
@@ -55,7 +54,6 @@ export class Whiteboard implements Whiteboard {
     // 监听画布变换事件，更新UI位置
     this.app.stage.on("transformed", () => {
       if (this.uiManager) {
-        console.log("Updating UI position due to canvas transform");
         this.uiManager.updatePosition();
       }
     });
@@ -63,6 +61,7 @@ export class Whiteboard implements Whiteboard {
 
   protected initializeManagers(): void {
     this.whiteManager = new WhiteBoardManager(this.app, this.mainContainer);
+
     this.whiteManager.setKeyboardHandlers({
       Delete: (event: KeyboardEvent) => {
         const selection = this.whiteManager
@@ -76,58 +75,42 @@ export class Whiteboard implements Whiteboard {
           return;
         }
 
-        card.deleteCard();
+        card.delete();
       },
     });
   }
 
-  // public destroy(): void {
-  //   this.app.canvas.removeEventListener('contextmenu', this.preventContextMenu);
-  //   this.dragManager.destroy();
-  //   this.gestureManager.destroy();
-  //   this.app.destroy();
-  // }
-
-  /**
-   *
-   * 设置单选
-   *
-   * @param selection 选中的元素
-   */
   public setSelection(selection: Container | null): void {
     this.whiteManager.getBoxSelection().selectElement(selection);
   }
 
-  /**
-   * 清空画布上的所有元素
-   */
   public clear(): void {
-    // 清空选中元素
     this.whiteManager.getBoxSelection().clear();
 
     this.mainContainer.children.forEach((child) => {
       if (child instanceof Card) {
-        child.removeCard();
+        child.remove();
       }
     });
   }
 
   public showCardToolbar(event: FederatedPointerEvent, card: Card): void {
     if (!this.uiManager) return;
-
     this.uiManager.showToolbar(event, card);
   }
 
-  /**
-   * 在canvas被添加到DOM后调用此方法初始化UI
-   */
   public initializeUI(): void {
     if (!this.app.canvas.parentElement) {
       console.error("Cannot initialize UI: Canvas is not in DOM");
       return;
     }
-    console.log("Initializing UI manager after canvas added to DOM");
-    this.uiManager = new UIOverlayManager(this.app);
+
+    // 创建 UIOverlayManager 实例
+    this.uiManager = new UIOverlayManager();
+    // 设置 app 属性
+    this.uiManager.app = this.app;
+    // 将组件添加到 canvas 的父元素中
+    this.app.canvas.parentElement.appendChild(this.uiManager);
   }
 
   public showContextMenu(event: FederatedPointerEvent, card: Card): void {

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "bundle/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build:ts": "tsc --distDir dist",
@@ -20,13 +20,14 @@
   "license": "ISC",
   "dependencies": {
     "dayjs": "^1.11.13",
+    "lit": "^3.2.1",
     "nanoid": "^5.0.9",
     "pixi.js": "^8.6.4",
     "rxdb": "^15.39.0"
   },
   "devDependencies": {
-    "@types/node": "^22.9.0",
-    "@boardeditor/model": "workspace:*"
+    "@boardeditor/model": "workspace:*",
+    "@types/node": "^22.9.0"
   },
   "peerDependencies": {
     "@boardeditor/model": "workspace:*"

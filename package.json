@@ -1,7 +1,7 @@
 {
   "name": "boardeditor",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "scripts": {
     "dev": "pnpm --filter @napkin/app dev",
     "build": "pnpm --filter @napkin/app build",

@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
 import { BoxSelection } from "./BoxSelection";
-import { FederatedEventTarget } from "pixi.js";
+import { Card } from "../..";
 
 type GestureHandler = (event: PIXI.FederatedPointerEvent) => void;
 
@@ -51,6 +51,10 @@ export class WhiteBoardManager {
   private onDoubleTap?: GestureHandler;
   private keyboardHandlers!: { [key: string]: (event: KeyboardEvent) => void };
 
+  private touchStartPosition: PIXI.Point | null = null;
+  private readonly touchMoveThreshold: number = 5; // 移动阈值，超过这个值就认为是在移动而不是点击
+  private hasTouchMoved: boolean = false;
+
   constructor(
     private app: PIXI.Application,
     private container: PIXI.Container,
@@ -88,6 +92,7 @@ export class WhiteBoardManager {
   }
 
   private handleZoom(e: WheelEvent, isPinchGesture: boolean): void {
+    this.app.stage.emit("transformed");
     const canvas = this.app.canvas;
     const zoomSpeed = isPinchGesture ? 0.028 : 0.0012;
     let newScale = this.scale * (1 - e.deltaY * zoomSpeed);
@@ -115,6 +120,7 @@ export class WhiteBoardManager {
     const moveSpeed = 1;
     this.container.x += dx * moveSpeed;
     this.container.y += dy * moveSpeed;
+    this.app.stage.emit("transformed");
   }
 
   private onPointerDown(event: PIXI.FederatedPointerEvent): void {
@@ -133,8 +139,23 @@ export class WhiteBoardManager {
       });
     }
 
+    // 记录触摸开始位置
+    this.touchStartPosition = event.global.clone();
+    this.hasTouchMoved = false;
+
+    const target = event.target as PIXI.Container;
+    // 检查是否点击了已选中的区域
+    if (this.boxSelection.isTargetSelected(target)) {
+      // 如果点击的是已选中区域，立即进入拖动状态
+      this.boxSelection.onPointerDown(event);
+      // 阻止画布拖动
+      this.isTouchPanning = false;
+      return;
+    }
+
     // 开始长按计时
     if (this.touchPoints.size === 1) {
+      this.startTouchPanning(event);
       this.startTouchHoldTimer(event);
     } else if (this.touchPoints.size === 2) {
       // 如果是双指操作，清除长按计时器
@@ -142,6 +163,7 @@ export class WhiteBoardManager {
       this.isTouchPinching = true;
       this.pinchDistance = 0;
       this.lastPinchDistance = 0;
+      // 不清除isTouchPanning状态，允许同时进行平移
     }
   }
 
@@ -149,15 +171,18 @@ export class WhiteBoardManager {
     this.clearTouchHoldTimer();
     this.isTouchHolding = false;
 
+    // 如果点击的是已选中区域，不启动长按计时器
+    const target = event.target as PIXI.Container;
+    if (this.boxSelection.isTargetSelected(target)) {
+      return;
+    }
+
     this.touchHoldTimer = window.setTimeout(() => {
       this.isTouchHolding = true;
       console.log("长按开始");
       // 如果超过0.25秒，不启动画布拖拽，而是进行选择操作
       this.isTouchPanning = false;
-      this.boxSelection.onPointerDown(
-        event.global,
-        event.target as FederatedEventTarget
-      );
+      this.boxSelection.onPointerDown(event);
     }, this.touchHoldDelay);
 
     // 立即启动画布拖拽，如果超时会被取消
@@ -173,10 +198,7 @@ export class WhiteBoardManager {
 
   private handleMouseDown(event: PIXI.FederatedPointerEvent): void {
     if (event.button === 0) {
-      this.boxSelection.onPointerDown(
-        event.global,
-        event.target as FederatedEventTarget
-      );
+      this.boxSelection.onPointerDown(event);
     } else if (event.button === 2) {
       this.startMousePanning(event);
     }
@@ -191,9 +213,23 @@ export class WhiteBoardManager {
   }
 
   private handleTouchMove(event: PIXI.FederatedPointerEvent): void {
+    if (this.touchStartPosition && !this.hasTouchMoved) {
+      const dx = event.global.x - this.touchStartPosition.x;
+      const dy = event.global.y - this.touchStartPosition.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > this.touchMoveThreshold) {
+        this.hasTouchMoved = true;
+      }
+    }
+
     if (this.touchPoints.has(event.pointerId)) {
       const oldPoint = this.touchPoints.get(event.pointerId)!;
       const newPoint = event.global.clone();
+      this.touchPoints.set(event.pointerId, {
+        id: event.pointerId,
+        pos: newPoint,
+      });
 
       // 如果移动距离超过阈值，取消长按
       const moveDistance = Math.sqrt(
@@ -202,23 +238,30 @@ export class WhiteBoardManager {
       );
 
       if (moveDistance > 5) {
-        // 5像素的移动阈值
         this.clearTouchHoldTimer();
       }
+    }
 
-      this.touchPoints.set(event.pointerId, {
-        id: event.pointerId,
-        pos: newPoint,
-      });
+    // 优先处理选中元素的拖动
+    const target = event.target as PIXI.Container;
+    if (
+      this.boxSelection.isTargetSelected(target) ||
+      this.boxSelection.isActive()
+    ) {
+      this.boxSelection.onPointerMove(event.global);
+      return;
     }
 
     if (this.isTouchPinching) {
       this.updatePinchZoom();
-    } else if (this.isTouchHolding && this.boxSelection.isActive()) {
-      // 如果是长按状态且选择框处于活动状态，更新选择框
-      this.boxSelection.onPointerMove(event.global);
-    } else if (this.isTouchPanning && !this.isTouchHolding) {
-      this.updatePanning(event);
+    }
+    if (this.isTouchPanning && !this.isTouchHolding) {
+      // 如果是双指操作，使用第一个手指的位置进行平移
+      if (this.touchPoints.size === 2 && event.isPrimary) {
+        this.updatePanning(event);
+      } else if (this.touchPoints.size === 1) {
+        this.updatePanning(event);
+      }
     }
   }
 
@@ -254,11 +297,37 @@ export class WhiteBoardManager {
       this.isTouchHolding = false;
       this.stopTouchPanning();
       this.boxSelection.onPointerUp();
+      this.touchStartPosition = null;
     }
   }
 
-  private onPointerTap(event: PIXI.FederatedPointerEvent): void {
-    if (event.pointerType === "touch" && !event.isPrimary) return;
+  private handleCardTap(event: PIXI.FederatedPointerEvent): void {
+    if (!(event.target instanceof Card)) return;
+
+    // 只有在触摸模式下且没有发生移动时才设置选中状态
+    if (event.pointerType === "touch" && !this.hasTouchMoved) {
+      // this.boxSelection.selectElement(event.target);
+      event.target.handleTap(event);
+    }
+
+    if (event.button === 2) {
+      // 处理右键点击
+      event.target.handleRightClick?.(event);
+    } else {
+      // 处理双击
+      const now = Date.now();
+      if (now - this.lastTapTime < this.doubleTapDelay) {
+        console.log("handleCardTap doubleTap", event.target);
+        event.target.handleDoubleTap(event);
+        this.lastTapTime = 0;
+      } else {
+        this.lastTapTime = now;
+      }
+    }
+  }
+
+  private handleStageTap(event: PIXI.FederatedPointerEvent): void {
+    if (event.target !== this.app.stage) return;
 
     const now = Date.now();
     if (now - this.lastTapTime < this.doubleTapDelay) {
@@ -268,8 +337,23 @@ export class WhiteBoardManager {
       this.lastTapTime = 0;
     } else {
       this.lastTapTime = now;
-      setTimeout(() => (this.lastTapTime = 0), this.doubleTapDelay);
     }
+  }
+
+  private onPointerTap(event: PIXI.FederatedPointerEvent): void {
+    // 如果是触摸事件且发生了移动，不执行tap逻辑
+    if (event.pointerType === "touch" && this.hasTouchMoved) {
+      return;
+    }
+
+    if (event.target instanceof Card) {
+      this.handleCardTap(event);
+    } else if (event.target === this.app.stage) {
+      this.handleStageTap(event);
+    }
+
+    // 重置双击计时器
+    setTimeout(() => (this.lastTapTime = 0), this.doubleTapDelay);
   }
 
   private startTouchPanning(event: PIXI.FederatedPointerEvent): void {
@@ -402,10 +486,29 @@ export class WhiteBoardManager {
 
     if (isNaN(newScale)) return;
 
+    // 计算缩放中心点
+    const center = {
+      x: (points[0].pos.x + points[1].pos.x) / 2,
+      y: (points[0].pos.y + points[1].pos.y) / 2,
+    };
+
+    // 相对于缩放中心点进行缩放
+    const beforeZoomPos = {
+      x: (center.x - this.container.x) / this.scale,
+      y: (center.y - this.container.y) / this.scale,
+    };
+
     this.container.scale.set(newScale);
+
+    // 调整位置以保持缩放中心点不变
+    this.container.x = center.x - beforeZoomPos.x * newScale;
+    this.container.y = center.y - beforeZoomPos.y * newScale;
+
     this.scale = newScale;
     this.lastPinchDistance = newDistance;
     this.pinchDistance = newDistance;
+
+    this.app.stage.emit("transformed");
   }
 
   private getDistance(p1: TouchPoint, p2: TouchPoint): number {

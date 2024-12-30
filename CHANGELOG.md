@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.4] - 2024 - 12 - 30
+
+### Added
+
+- endDraw 函数，根据选中内容的边界渲染矩形
+- 允许使用触摸的 Tap 逻辑
+
+### Fixed
+
+- 触摸无需等待 0.25s，直接触发 Tap 逻辑
+- 解决双击内容无法编辑的 bug（在 Editabletext 组件添加事件延时）
+- 解决 CTRL+A 全选 UIOverlay 的 bug
+- 解决工具栏无法跟随卡片移动的 bug
+- 解决使用事件委托时，右键菜单不显示的 bug
+- 解决无法框选内容的 bug
+- 解决在 UIOverlay 组件中双指缩放，会导致整个页面缩放的 bug
+- 解决双指只 pinching 无法 panning 的 bug
+
+### Changed
+
+- 重构 UIOverlayManager ，使用 Lit 库替代原生的 Dom 实现
+
 ## [0.0.3] - 2024-12-28
 
 ### Changed

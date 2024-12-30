@@ -112,7 +112,7 @@ export class Card extends Container {
 
   /** 初始化事件监听 */
   private initializeEvents(): void {
-    this.textField.on("textChanged", this.onTextChanged.bind(this));
+    this.textField.on("textChanged", this.handleTextChange.bind(this));
   }
 
   /** 初始化拖拽管理器 */
@@ -120,12 +120,12 @@ export class Card extends Container {
     // this.DraggableManager = new CardDraggableManager(this.app, this);
     // this.DraggableManager.initialize();
     // this.clickEventManager = new ClickEventManager(this);
-    // this.clickEventManager.setOnTapCallback(this.onTap.bind(this));
+    // this.clickEventManager.setOnTapCallback(this.handleTap.bind(this));
     // this.clickEventManager.setOnDoubleTapCallback((e) => {
     //   this.textField.handleEdit(e);
     // });
     // this.clickEventManager.setOnRightClickCallback((e) => {
-    //   this.onRightClick(e);
+    //   this.handleRightClick(e);
     // });
   }
 
@@ -297,7 +297,7 @@ export class Card extends Container {
   }
 
   /** 文本变化处理 */
-  private async onTextChanged(): Promise<void> {
+  private async handleTextChange(): Promise<void> {
     if (this.rxDocument) {
       const newestDocument = await this.rxDocument.update({
         $set: {
@@ -385,10 +385,11 @@ export class Card extends Container {
 
   public setSelected(selected: boolean): void {
     this.selected = selected;
+
     this.drawBackground();
   }
 
-  public onTap(event?: FederatedPointerEvent): void {
+  public handleTap(event?: FederatedPointerEvent): void {
     this.whiteboard.setSelection(this);
     // 显示工具栏
     if (event) {
@@ -396,11 +397,15 @@ export class Card extends Container {
     }
   }
 
-  public async removeCard() {
+  public handleDoubleTap(event: FederatedPointerEvent): void {
+    this.textField.handleEdit(event);
+  }
+
+  public remove() {
     this.whiteboard.mainContainer.removeChild(this);
   }
 
-  public async deleteCard() {
+  public async delete() {
     this.whiteboard.mainContainer.removeChild(this);
     const newestDocumen = await this.rxDocument?.update({
       $set: { in_trash: true },
@@ -408,7 +413,9 @@ export class Card extends Container {
     this.rxDocument = newestDocumen;
   }
 
-  private onRightClick(event: FederatedPointerEvent): void {
+  public handleRightClick(event: FederatedPointerEvent): void {
+    this.setSelected(true);
+
     // 显示右键菜单
     this.whiteboard.showContextMenu(event, this);
   }

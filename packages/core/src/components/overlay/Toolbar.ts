@@ -51,6 +51,9 @@ export class Toolbar extends LitElement {
   @property({ attribute: false })
   declare app: Application;
 
+  private currentX: number = 0;
+  private currentY: number = 0;
+
   constructor() {
     super();
     this.activeCard = null;
@@ -86,7 +89,7 @@ export class Toolbar extends LitElement {
 
   protected handleEdit(): void {
     if (this.activeCard) {
-      this.activeCard.textField.handleEdit();
+      this.activeCard.handleTextEdit();
       this.hide();
     }
   }
@@ -109,23 +112,26 @@ export class Toolbar extends LitElement {
   }
 
   public updatePosition(): void {
-    if (!this.activeCard || !this.app) return;
+    if (!this.activeCard || !this.app || !this.visible) {
+      return;
+    }
 
     const toolbar = this.shadowRoot?.querySelector(".toolbar") as HTMLElement;
-    if (!toolbar) return;
+    if (!toolbar) {
+      return;
+    }
 
     const canvasBounds = this.app.canvas.getBoundingClientRect();
-    const scale = this.app.stage.scale.x;
-    const cardBounds = this.activeCard.getBounds();
+    const globalPosition = this.activeCard.getGlobalPosition();
     const stagePosition = this.app.stage.position;
 
-    // 计算卡片在画布上的实际位置
-    const x = canvasBounds.left + (cardBounds.x * scale + stagePosition.x);
+    // 计算工具栏位置，将其放置在卡片的正上方
+    const x = canvasBounds.left + (globalPosition.x + stagePosition.x);
     const y =
       canvasBounds.top +
-      (cardBounds.y * scale + stagePosition.y) -
+      (globalPosition.y + stagePosition.y) -
       toolbar.offsetHeight -
-      10;
+      10; // 在卡片上方10px的位置
 
     toolbar.style.transform = `translate(${x}px, ${y}px)`;
   }

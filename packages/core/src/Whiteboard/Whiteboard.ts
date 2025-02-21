@@ -47,37 +47,29 @@ export class Whiteboard implements Whiteboard {
     this.app.stage.addChild(this.mainContainer);
     this.app.stage.eventMode = "static";
     this.app.stage.hitArea = this.app.screen;
+    this.app.canvas.tabIndex = 0;
     this.app.canvas.addEventListener("contextmenu", (e: Event) =>
       e.preventDefault()
     );
-
-    // 监听画布变换事件，更新UI位置
-    this.app.stage.on("transformed", () => {
-      if (this.uiManager) {
-        this.uiManager.updatePosition();
-      }
-    });
+    this.app.canvas.style.outline = "none"; // remove focus outline
   }
 
   protected initializeManagers(): void {
     this.whiteManager = new WhiteBoardManager(this.app, this.mainContainer);
 
-    this.whiteManager.setKeyboardHandlers({
-      Delete: (event: KeyboardEvent) => {
-        const selection = this.whiteManager
-          .getBoxSelection()
-          .getSelectedElement();
-        if (!selection) return;
-
-        const card = selection as Card;
-        if (card.textField.isEditing) {
-          console.log("正在编辑中，不能删除");
-          return;
-        }
-
-        card.delete();
-      },
+    // Listen for 'transformed' event (emitted by WhiteManager) to update UI position
+    this.app.stage.on("transformed", () => {
+      if (this.uiManager) {
+        this.uiManager.updatePosition();
+      }
     });
+
+    this.whiteManager
+      .getBoxSelection()
+      .selectionBox.on("rightClick", (event: FederatedPointerEvent) => {
+        console.log("rightClick", event);
+        this.showContextMenu(event, null);
+      });
   }
 
   public setSelection(selection: Container | null): void {
@@ -97,6 +89,11 @@ export class Whiteboard implements Whiteboard {
   public showCardToolbar(event: FederatedPointerEvent, card: Card): void {
     if (!this.uiManager) return;
     this.uiManager.showToolbar(event, card);
+  }
+
+  public showEditableText(card: Card): void {
+    if (!this.uiManager) return;
+    this.uiManager.showEditableText(card);
   }
 
   public initializeUI(): void {

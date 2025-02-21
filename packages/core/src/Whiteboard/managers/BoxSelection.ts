@@ -1,8 +1,9 @@
 import * as PIXI from "pixi.js";
 import { Card } from "../../Card/Card";
+import { FederatedPointerEvent } from "pixi.js";
 
 export class BoxSelection {
-  private selectionBox: PIXI.Graphics;
+  public selectionBox: PIXI.Graphics;
   private selectedElements: Set<PIXI.Container> = new Set();
 
   // 框选状态
@@ -107,7 +108,11 @@ export class BoxSelection {
     this.selectedElements.forEach((element) => {
       const startPos = this.dragStartPositions.get(element);
       if (startPos) {
-        element.position.set(startPos.x + dx, startPos.y + dy);
+        if (element instanceof Card) {
+          element.updatePosition(startPos.x + dx, startPos.y + dy);
+        } else {
+          element.position.set(startPos.x + dx, startPos.y + dy);
+        }
       }
     });
 
@@ -134,6 +139,9 @@ export class BoxSelection {
 
   private updateDraw(point: PIXI.Point): void {
     if (!this.drawStartPoint) return;
+
+    this.findIntersectingElements();
+
     const bounds = this.calculateBounds(this.drawStartPoint, point);
     this.drawBox(bounds, true);
   }
@@ -147,37 +155,42 @@ export class BoxSelection {
     if (this.selectedElements.size === 0) {
       this.clear();
     } else {
-      // 计算所有选中元素的边界
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-
-      this.selectedElements.forEach((element) => {
-        const bounds = element.getBounds();
-        minX = Math.min(minX, bounds.x);
-        minY = Math.min(minY, bounds.y);
-        maxX = Math.max(maxX, bounds.right);
-        maxY = Math.max(maxY, bounds.bottom);
-      });
-
-      // 将全局坐标转换为相对于mainContainer的本地坐标
-      const topLeft = this.mainContainer.toLocal(new PIXI.Point(minX, minY));
-      const bottomRight = this.mainContainer.toLocal(
-        new PIXI.Point(maxX, maxY)
-      );
-
-      // 使用计算出的边界绘制选择框
-      this.drawBox(
-        new PIXI.Rectangle(
-          topLeft.x,
-          topLeft.y,
-          bottomRight.x - topLeft.x,
-          bottomRight.y - topLeft.y
-        ),
-        false
-      );
+      this.drawSelectionBoxForElements();
     }
+  }
+
+  /**
+   * draw the selection box for the selected elements,after endDraw
+   */
+  private drawSelectionBoxForElements(): void {
+    // 计算所有选中元素的边界
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    this.selectedElements.forEach((element) => {
+      const bounds = element.getBounds();
+      minX = Math.min(minX, bounds.x);
+      minY = Math.min(minY, bounds.y);
+      maxX = Math.max(maxX, bounds.right);
+      maxY = Math.max(maxY, bounds.bottom);
+    });
+
+    // 将全局坐标转换为相对于mainContainer的本地坐标
+    const topLeft = this.mainContainer.toLocal(new PIXI.Point(minX, minY));
+    const bottomRight = this.mainContainer.toLocal(new PIXI.Point(maxX, maxY));
+
+    // 使用计算出的边界绘制选择框
+    this.drawBox(
+      new PIXI.Rectangle(
+        topLeft.x - 10,
+        topLeft.y - 10,
+        bottomRight.x - topLeft.x + 20,
+        bottomRight.y - topLeft.y + 20
+      ),
+      false
+    );
   }
 
   private calculateBounds(start: PIXI.Point, end: PIXI.Point): PIXI.Rectangle {
@@ -205,6 +218,11 @@ export class BoxSelection {
     }
   }
 
+  /**
+   * - traversal all elements in the mainContainer
+   * - findIntersectingElements，then add to this.selectedElements and run element.setSelected(true)，
+   * - if not intersecting,then remove from this.selectedElements and run element.setSelected(false)
+   */
   private findIntersectingElements(): void {
     if (!this.selectionBox || !this.mainContainer.children[0]) return;
 
@@ -214,12 +232,22 @@ export class BoxSelection {
 
     contents.forEach((element) => {
       if (this.isIntersecting(element)) {
+        // 相交则添加到选中集合并设置选中状态
         this.selectedElements.add(element);
         if (
           "setSelected" in element &&
           typeof element.setSelected === "function"
         ) {
           element.setSelected(true);
+        }
+      } else {
+        // 不相交则从选中集合移除并取消选中状态
+        this.selectedElements.delete(element);
+        if (
+          "setSelected" in element &&
+          typeof element.setSelected === "function"
+        ) {
+          element.setSelected(false);
         }
       }
     });
@@ -242,6 +270,9 @@ export class BoxSelection {
     );
   }
 
+  /**
+   * clear the selected elements and the selection box
+   */
   public clear(): void {
     this.selectedElements.forEach((element) => {
       if (
@@ -259,19 +290,15 @@ export class BoxSelection {
     this.isDragging = false;
   }
 
+  /**
+   * get the selected elements
+   */
   public getSelectedElements(): Set<PIXI.Container> {
     return this.selectedElements;
   }
 
   public isActive(): boolean {
     return this.isDrawing || this.isDragging;
-  }
-
-  // 新增：获取当前选中的单个元素
-  public getSelectedElement(): PIXI.Container | null {
-    return this.selectedElements.size === 1
-      ? Array.from(this.selectedElements)[0]
-      : null;
   }
 
   // 新增：设置单个元素的选中状态
@@ -294,5 +321,28 @@ export class BoxSelection {
     } else if (this.isDrawing) {
       this.endDraw();
     }
+  }
+
+  public selectElements(elements: PIXI.Container[]): void {
+    this.clear();
+    elements.forEach((element) => {
+      this.selectedElements.add(element);
+      if (
+        "setSelected" in element &&
+        typeof element.setSelected === "function"
+      ) {
+        element.setSelected(true);
+      }
+    });
+
+    // 如果有选中的元素，计算并绘制包围框
+    if (this.selectedElements.size > 0) {
+      this.drawSelectionBoxForElements();
+    }
+  }
+
+  public handleRightClick(event: FederatedPointerEvent): void {
+    console.log("handleRightClick");
+    this.selectionBox.emit("rightClick", event);
   }
 }

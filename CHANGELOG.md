@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.0.5] - 2024 - ??
+
+### Added
+
+- 新增 KeyboardManager 管理键盘事件
+- 新增功能：全选快捷键
+
+### Removed
+
+- 移除 EditableText 组件，改为使用 TextInputTool 组件显示文本输入框
+
 ## [0.0.4] - 2024 - 12 - 30
 
 ### Added

@@ -5,6 +5,7 @@ import { Card } from "../Card";
 import "../components/overlay/Toolbar";
 import "../components/overlay/ComponentsPanel";
 import "../components/overlay/ContextMenu";
+import "../components/overlay/TextInputTool";
 
 @customElement("ui-overlay-manager")
 export class UIOverlayManager extends LitElement {
@@ -33,6 +34,7 @@ export class UIOverlayManager extends LitElement {
   protected toolbar?: HTMLElement;
   protected contextMenu?: HTMLElement;
   protected componentsPanel?: HTMLElement;
+  protected textInput?: HTMLElement;
 
   constructor() {
     super();
@@ -47,9 +49,15 @@ export class UIOverlayManager extends LitElement {
     this.componentsPanel = this.shadowRoot?.querySelector(
       "ui-components-panel"
     ) as HTMLElement;
+    this.textInput = this.shadowRoot?.querySelector(
+      "ui-text-input"
+    ) as HTMLElement;
 
     if (this.toolbar) {
       (this.toolbar as any).app = this.app;
+    }
+    if (this.textInput) {
+      (this.textInput as any).app = this.app;
     }
   }
 
@@ -72,9 +80,18 @@ export class UIOverlayManager extends LitElement {
     }
   }
 
+  public showEditableText(card: Card): void {
+    if (this.textInput) {
+      (this.textInput as any).show(card);
+    }
+  }
+
   public updatePosition(): void {
     if (this.toolbar) {
       (this.toolbar as any).updatePosition?.();
+    }
+    if (this.textInput) {
+      (this.textInput as any).updatePosition?.();
     }
   }
 
@@ -83,6 +100,7 @@ export class UIOverlayManager extends LitElement {
       <ui-toolbar .app=${this.app}></ui-toolbar>
       <ui-components-panel></ui-components-panel>
       <ui-context-menu></ui-context-menu>
+      <ui-text-input .app=${this.app}></ui-text-input>
     `;
   }
 }

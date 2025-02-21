@@ -8,28 +8,27 @@ import {
 } from "pixi.js";
 import dayjs from "dayjs";
 
-import { CardDraggableManager } from "./managers/CardDraggableManager";
 import { RxDocument } from "rxdb";
 import { CardDocument } from "@boardeditor/model";
-import { EditableText } from "./EditableText";
 import { ArrowManager } from "../managers/ArrowManager";
 import { Whiteboard } from "../Whiteboard/index";
 import { ClickEventManager } from "../managers/index";
 
 export class Card extends Container {
-  public background!: Graphics; // 卡片的背景图形，也是用于判定的判定点
+  public background!: Graphics;
 
-  public textField!: EditableText; // 卡片的文本内容
+  public text!: Text; // 替换原来的textField
+  public isTextEditing: boolean = false; // 新增：文本是否处于编辑状态
+  private maxTextWidth: number = 0; // 新增：文本最大宽度
+  public isMultiline: boolean = true; // 新增：是否支持多行
 
-  private tagsContainer!: Container; // 标签容器
+  private tagsContainer!: Container;
 
-  private timeText!: Text; // 时间显示组件
+  private timeText!: Text;
 
   public whiteboard: Whiteboard;
 
   public app: Application;
-
-  private DraggableManager!: CardDraggableManager;
 
   private clickEventManager!: ClickEventManager;
 
@@ -39,7 +38,7 @@ export class Card extends Container {
 
   public childrenCardRef: Card[] = [];
 
-  private selected: boolean = false; // 卡片是否被选中
+  private selected: boolean = false;
 
   // 常量配置
   private readonly padding: number = 20;
@@ -98,12 +97,11 @@ export class Card extends Container {
 
     this.initializeComponents(this.rxDocument?.text ?? "Untitled");
     this.initializeEvents();
-    this.initializeDragManager();
   }
 
   /** 初始化组件 */
   private initializeComponents(text: string): void {
-    this.createTags(); // 先创建标签，确保它在背景层下方
+    this.createTags();
     this.createBackground();
     this.createTimeText();
     this.createText(text);
@@ -112,21 +110,7 @@ export class Card extends Container {
 
   /** 初始化事件监听 */
   private initializeEvents(): void {
-    this.textField.on("textChanged", this.handleTextChange.bind(this));
-  }
-
-  /** 初始化拖拽管理器 */
-  private initializeDragManager(): void {
-    // this.DraggableManager = new CardDraggableManager(this.app, this);
-    // this.DraggableManager.initialize();
-    // this.clickEventManager = new ClickEventManager(this);
-    // this.clickEventManager.setOnTapCallback(this.handleTap.bind(this));
-    // this.clickEventManager.setOnDoubleTapCallback((e) => {
-    //   this.textField.handleEdit(e);
-    // });
-    // this.clickEventManager.setOnRightClickCallback((e) => {
-    //   this.handleRightClick(e);
-    // });
+    this.on("textChanged", this.handleTextChange.bind(this));
   }
 
   /** 创建背景 */
@@ -162,33 +146,66 @@ export class Card extends Container {
 
   /** 创建文本 */
   private createText(text: string): void {
+    const defaultFontFamily =
+      "'Microsoft YaHei', '微软雅黑', 'SimHei', '黑体', sans-serif";
     const style: Partial<TextStyle> = {
       fontSize: 16,
       fill: 0x666666,
+      wordWrap: true,
+      wordWrapWidth: this.cardWidth - this.padding * 2,
+      breakWords: true,
+      fontFamily: defaultFontFamily,
     };
-    this.textField = this.createEditableText(text, style, true);
-    this.textField.position.set(this.padding, this.padding * 2);
-    this.addChild(this.textField);
+
+    this.maxTextWidth = this.cardWidth - this.padding * 2;
+    this.text = new Text({ text, style });
+    this.text.position.set(this.padding, this.padding * 2);
+    this.text.eventMode = "none";
+    this.addChild(this.text);
   }
 
-  /** 创建可编辑文本 */
-  private createEditableText(
-    text: string,
-    style: Partial<TextStyle>,
-    isMultiline: boolean
-  ): EditableText {
-    const editableText = new EditableText(
-      { text, style },
-      this.app,
-      isMultiline,
-      this.cardWidth - this.padding * 2
-    );
+  /** 获取文本缩放比例 */
+  public getTextScaleCompensation(): number {
+    return this.app.stage.children[0].scale.x;
+  }
 
-    editableText.on("textChanged", () => {
-      this.updateLayout();
-    });
+  /** 处理文本编辑 */
+  public handleTextEdit(event?: FederatedPointerEvent) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
 
-    return editableText;
+    if (!this.isTextEditing) {
+      this.isTextEditing = true;
+      this.text.visible = false;
+      this.whiteboard.showEditableText(this);
+    }
+  }
+
+  /** 文本变化处理 */
+  private async handleTextChange(newText: string): Promise<void> {
+    console.log("handleTextChange", newText);
+
+    this.text.text = newText;
+    this.text.visible = true;
+    this.isTextEditing = false;
+
+    if (this.rxDocument) {
+      const newestDocument = await this.rxDocument.update({
+        $set: {
+          text: this.text.text,
+          last_edited_time: new Date().toISOString(),
+        },
+      });
+
+      this.rxDocument = newestDocument;
+    }
+  }
+
+  /** 获取文本最大宽度 */
+  public getMaxWidth(): number {
+    return this.maxTextWidth;
   }
 
   /** 更新布局 */
@@ -196,7 +213,7 @@ export class Card extends Container {
     if (this.tagsContainer) {
       this.tagsContainer.position.set(
         this.padding,
-        Math.max(this.minHeight, this.textField.height + this.padding * 3) +
+        Math.max(this.minHeight, this.text.height + this.padding * 3) +
           this.tagBottomGap
       );
     }
@@ -208,7 +225,7 @@ export class Card extends Container {
   private drawBackground(): void {
     const totalHeight = Math.max(
       this.minHeight,
-      this.textField.height + this.padding * 3
+      this.text.height + this.padding * 3
     );
 
     this.background.clear();
@@ -296,20 +313,6 @@ export class Card extends Container {
     return tagContainer;
   }
 
-  /** 文本变化处理 */
-  private async handleTextChange(): Promise<void> {
-    if (this.rxDocument) {
-      const newestDocument = await this.rxDocument.update({
-        $set: {
-          text: this.textField.text,
-          last_edited_time: new Date().toISOString(),
-        },
-      });
-
-      this.rxDocument = newestDocument;
-    }
-  }
-
   /** 添加子卡片 */
   public addChildCard(childCard: Card): void {
     console.log("❌v0.0.1版本暂时不许添加子卡片");
@@ -383,25 +386,31 @@ export class Card extends Container {
     });
   }
 
+  public handleDoubleTap(event: FederatedPointerEvent): void {
+    this.handleTextEdit(event);
+  }
+
+  public handleDelete(): void {
+    if (this.isTextEditing) {
+      console.log("正在编辑中，不能删除");
+      return;
+    }
+    this.delete();
+  }
+
   public setSelected(selected: boolean): void {
     this.selected = selected;
-
     this.drawBackground();
   }
 
   public handleTap(event?: FederatedPointerEvent): void {
     this.whiteboard.setSelection(this);
-    // 显示工具栏
     if (event) {
       this.whiteboard.showCardToolbar(event, this);
     }
   }
 
-  public handleDoubleTap(event: FederatedPointerEvent): void {
-    this.textField.handleEdit(event);
-  }
-
-  public remove() {
+  public remove(): void {
     this.whiteboard.mainContainer.removeChild(this);
   }
 
@@ -415,8 +424,11 @@ export class Card extends Container {
 
   public handleRightClick(event: FederatedPointerEvent): void {
     this.setSelected(true);
-
-    // 显示右键菜单
     this.whiteboard.showContextMenu(event, this);
+  }
+
+  public updatePosition(x: number, y: number): void {
+    this.position.set(x, y);
+    this.whiteboard.app.stage.emit("transformed");
   }
 }

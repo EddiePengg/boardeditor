@@ -1,6 +1,7 @@
 import * as PIXI from "pixi.js";
 import { BoxSelection } from "./BoxSelection";
 import { Card } from "../..";
+import { KeyboardManager, ShortcutConfig } from "./KeyboardManager";
 
 type GestureHandler = (event: PIXI.FederatedPointerEvent) => void;
 
@@ -49,7 +50,7 @@ export class WhiteBoardManager {
   private readonly doubleTapDelay: number;
   private lastTapTime: number = 0;
   private onDoubleTap?: GestureHandler;
-  private keyboardHandlers!: { [key: string]: (event: KeyboardEvent) => void };
+  private keyboardManager: KeyboardManager;
 
   private touchStartPosition: PIXI.Point | null = null;
   private readonly touchMoveThreshold: number = 5; // 移动阈值，超过这个值就认为是在移动而不是点击
@@ -62,7 +63,42 @@ export class WhiteBoardManager {
   ) {
     this.doubleTapDelay = doubleTapDelay;
     this.boxSelection = new BoxSelection(this.app.stage, this.container);
+    this.keyboardManager = new KeyboardManager(app.canvas);
+    this.setupDefaultShortcuts();
     this.setupEventListeners();
+  }
+
+  private setupDefaultShortcuts(): void {
+    this.keyboardManager.registerShortcuts([
+      {
+        key: "a",
+        ctrl: true,
+        handler: (event) => {
+          this.selectAllCards();
+        },
+        description: "全选卡片",
+      },
+      {
+        key: "Delete",
+        handler: (event) => {
+          const selection = this.getBoxSelection().getSelectedElements();
+          if (!selection) return;
+
+          selection.values().forEach((element) => {
+            if (element instanceof Card) {
+              if (element.isTextEditing) {
+                console.log("正在编辑中，不能删除");
+                return;
+              }
+              element.delete();
+            }
+          });
+
+          this.getBoxSelection().clear();
+        },
+        description: "删除选中的卡片",
+      },
+    ]);
   }
 
   private setupEventListeners(): void {
@@ -72,8 +108,6 @@ export class WhiteBoardManager {
     stage.on("pointerup", this.onPointerUp.bind(this));
     stage.on("pointerupoutside", this.onPointerUp.bind(this));
     stage.on("pointertap", this.onPointerTap.bind(this));
-
-    window.addEventListener("keydown", this.onKeyDown.bind(this));
 
     this.app.canvas.addEventListener("wheel", this.onWheel.bind(this), {
       passive: false,
@@ -143,19 +177,20 @@ export class WhiteBoardManager {
     this.touchStartPosition = event.global.clone();
     this.hasTouchMoved = false;
 
-    const target = event.target as PIXI.Container;
-    // 检查是否点击了已选中的区域
-    if (this.boxSelection.isTargetSelected(target)) {
-      // 如果点击的是已选中区域，立即进入拖动状态
-      this.boxSelection.onPointerDown(event);
-      // 阻止画布拖动
-      this.isTouchPanning = false;
-      return;
-    }
+    // const target = event.target as PIXI.Container;
+    // // 检查是否点击了已选中的区域
+    // if (this.boxSelection.isTargetSelected(target)) {
+    //   // 如果点击的是已选中区域，立即进入拖动状态
+    //   this.boxSelection.onPointerDown(event);
+    //   // 阻止画布拖动
+    //   this.isTouchPanning = false;
+    //   return;
+    // }
 
     // 开始长按计时
     if (this.touchPoints.size === 1) {
-      this.startTouchPanning(event);
+      // this.startTouchPanning(event);
+      console.log("startTouchHoldTimer");
       this.startTouchHoldTimer(event);
     } else if (this.touchPoints.size === 2) {
       // 如果是双指操作，清除长按计时器
@@ -174,6 +209,10 @@ export class WhiteBoardManager {
     // 如果点击的是已选中区域，不启动长按计时器
     const target = event.target as PIXI.Container;
     if (this.boxSelection.isTargetSelected(target)) {
+      // 如果点击的是已选中区域，立即进入拖动状态
+      this.boxSelection.onPointerDown(event);
+      // 阻止画布拖动
+      this.isTouchPanning = false;
       return;
     }
 
@@ -350,10 +389,18 @@ export class WhiteBoardManager {
       this.handleCardTap(event);
     } else if (event.target === this.app.stage) {
       this.handleStageTap(event);
+    } else if (event.target === this.boxSelection.selectionBox) {
+      this.handleBoxSelectionTap(event);
     }
 
     // 重置双击计时器
     setTimeout(() => (this.lastTapTime = 0), this.doubleTapDelay);
+  }
+
+  private handleBoxSelectionTap(event: PIXI.FederatedPointerEvent): void {
+    if (event.button === 2) {
+      this.boxSelection.handleRightClick(event);
+    }
   }
 
   private startTouchPanning(event: PIXI.FederatedPointerEvent): void {
@@ -517,25 +564,37 @@ export class WhiteBoardManager {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
-  private onKeyDown(event: KeyboardEvent): void {
-    if (!this.keyboardHandlers) return;
-    const handler = this.keyboardHandlers[event.key];
-    if (handler) {
-      handler(event);
-    }
-  }
-
   public setDoubleTapHandler(handler: GestureHandler): void {
     this.onDoubleTap = handler;
-  }
-
-  public setKeyboardHandlers(handlers: {
-    [key: string]: (event: KeyboardEvent) => void;
-  }): void {
-    this.keyboardHandlers = handlers;
   }
 
   public getBoxSelection(): BoxSelection {
     return this.boxSelection;
   }
+
+  // 添加全选功能
+  private selectAllCards(): void {
+    console.log("selectAllCards");
+    const cards = this.container.children.filter(
+      (child) => child instanceof Card
+    );
+    if (cards.length > 0) {
+      this.boxSelection.selectElements(cards);
+    }
+  }
+
+  public registerShortcut(config: ShortcutConfig): void {
+    this.keyboardManager.registerShortcut(config);
+  }
+
+  public registerShortcuts(configs: ShortcutConfig[]): void {
+    this.keyboardManager.registerShortcuts(configs);
+  }
+
+  /**
+   * @deprecated 这个方法已经被弃用,请使用新的键盘事件处理方式
+   */
+  public setKeyboardHandlers(handlers: {
+    [key: string]: (event: KeyboardEvent) => void;
+  }): void {}
 }

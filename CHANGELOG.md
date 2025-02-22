@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.0.5] - 2024 - ??
+## [0.0.5] - 2025 - 02 - 22
 
 ### Added
 
@@ -10,6 +10,23 @@
 ### Removed
 
 - 移除 EditableText 组件，改为使用 TextInputTool 组件显示文本输入框
+
+### Changed
+
+- [LIN-43: feature：右键对卡片进行排序](https://linear.app/linearuser/issue/LIN-43/feature：右键对卡片进行排序)
+- [LIN-46: improvement：梳理发布/订阅模式以及 Public 方法，解决 BoxSelection 与 Whiteboard 递归引用问题](https://linear.app/linearuser/issue/LIN-46/improvement：梳理发布订阅模式以及public方法，解决boxselection与whiteboard递归引用问题)
+- [LIN-34: BUG：Toolbar 无法跟随 Card 移动](https://linear.app/linearuser/issue/LIN-34/bug：toolbar无法跟随card移动)
+- [LIN-33: improve：Card 编辑结束的逻辑应该由 Card 处理，而不是 TextInputTool 处理](https://linear.app/linearuser/issue/LIN-33/improve：card编辑结束的逻辑应该由card处理，而不是textinputtool处理)
+- [LIN-29: bug：TextInputTool 无法被释放](https://linear.app/linearuser/issue/LIN-29/bug：textinputtool无法被释放)
+- [LIN-28: improve：BoxSelection 的 getSelectedElement 和 getSelectedElements 功能重复](https://linear.app/linearuser/issue/LIN-28/improve：boxselection的getselectedelement和getselectedelements功能重复)
+- [LIN-27: feature：支持批量删除](https://linear.app/linearuser/issue/LIN-27/feature：支持批量删除)
+- [LIN-26: feature：BoxSelection 实时选择](https://linear.app/linearuser/issue/LIN-26/feature：boxselection实时选择)
+- [LIN-49: feature：完善右键排序功能](https://linear.app/linearuser/issue/LIN-49/feature：完善右键排序功能)
+- [LIN-48: improvement：重构所有 UIOverayManager 的实现方式，改为发布/订阅模式](https://linear.app/linearuser/issue/LIN-48/improvement：重构所有uioveraymanager的实现方式，改为发布订阅模式)
+- [LIN-21: feat：实现全选快捷键](https://linear.app/linearuser/issue/LIN-21/feat：实现全选快捷键)
+- [LIN-20: feat：把内容输入框从 EditableText 改到使用 UIOverlayManager 实现](https://linear.app/linearuser/issue/LIN-20/feat：把内容输入框从editabletext改到使用uioverlaymanager实现)
+- [LIN-19: bug：fix：InputTool 显示位置不正确](https://linear.app/linearuser/issue/LIN-19/bug：fix：inputtool显示位置不正确)
+- [LIN-18: bug：TextInputTool 以及 Toolbar 不能跟随屏幕移动](https://linear.app/linearuser/issue/LIN-18/bug：textinputtool以及toolbar不能跟随屏幕移动)
 
 ## [0.0.4] - 2024 - 12 - 30
 

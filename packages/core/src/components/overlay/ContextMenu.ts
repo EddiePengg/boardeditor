@@ -1,35 +1,38 @@
-import { LitElement, html, css } from "lit";
+import { LitElement, html, css, TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { Card } from "../../Card";
+import { ContextMenuItem } from "../../types/context-menu";
 
 @customElement("ui-context-menu")
 export class ContextMenu extends LitElement {
+  @property({ type: Array })
+  items: ContextMenuItem[] = [];
+
+  @property({ type: Boolean })
+  visible = false;
+
+  @property({ type: Number })
+  x = 0;
+
+  @property({ type: Number })
+  y = 0;
+
   static override styles = css`
     :host {
-      display: block;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      -ms-touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
+      position: fixed;
+      z-index: 1000;
     }
 
-    .context-menu {
-      position: fixed;
+    .context-menu,
+    .submenu {
+      position: absolute;
       background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      pointer-events: auto;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      min-width: 200px;
       display: none;
-      z-index: 1000;
-      min-width: 160px;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      -ms-touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
+      pointer-events: auto; // 确保菜单可以响应点击事件
     }
 
     .context-menu.visible {
@@ -37,242 +40,168 @@ export class ContextMenu extends LitElement {
     }
 
     .context-menu-item {
+      padding: 8px 16px;
       display: flex;
       align-items: center;
-      padding: 8px 12px;
+      gap: 8px;
       cursor: pointer;
-      border-radius: 4px;
       position: relative;
     }
 
     .context-menu-item:hover {
-      background: #f7fafc;
+      background: #f5f5f5;
     }
 
-    .context-menu-separator {
-      height: 1px;
-      background: #e2e8f0;
-      margin: 4px 0;
+    .icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shortcut {
+      margin-left: auto;
+      color: #666;
+      font-size: 0.9em;
+    }
+
+    .arrow {
+      margin-left: auto;
+    }
+
+    .context-menu-item:hover > .submenu {
+      display: block;
     }
 
     .submenu {
-      position: fixed;
-      background: white;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 4px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      pointer-events: auto;
+      position: absolute;
+      left: 100%;
+      top: 0;
       display: none;
-      z-index: 1001;
-      min-width: 160px;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      -ms-touch-action: none;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    .submenu.visible {
-      display: block;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      min-width: 200px;
     }
   `;
 
-  @property({ attribute: false })
-  declare activeCard: Card | null;
-
-  @property({ type: Boolean })
-  declare visible: boolean;
-
   constructor() {
     super();
-    this.activeCard = null;
-    this.visible = false;
     this.handleOutsideClick = this.handleOutsideClick.bind(this);
-    this.handleWheel = this.handleWheel.bind(this);
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener("click", this.handleOutsideClick);
-    this.addEventListener("wheel", this.handleWheel, { passive: false });
-    this.addEventListener("gesturestart", this.preventDefault);
-    this.addEventListener("gesturechange", this.preventDefault);
-    this.addEventListener("gestureend", this.preventDefault);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener("click", this.handleOutsideClick);
-    this.removeEventListener("wheel", this.handleWheel);
-    this.removeEventListener("gesturestart", this.preventDefault);
-    this.removeEventListener("gesturechange", this.preventDefault);
-    this.removeEventListener("gestureend", this.preventDefault);
-  }
-
-  private handleWheel(e: WheelEvent): void {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-    }
-  }
-
-  private preventDefault(e: Event): void {
-    e.preventDefault();
   }
 
   protected handleOutsideClick(e: MouseEvent): void {
+    if (!this.visible) return;
+
     const path = e.composedPath();
-    if (!path.includes(this)) {
+    const menuElement = this.shadowRoot?.querySelector(".context-menu");
+
+    if (menuElement && !path.includes(menuElement)) {
       this.hide();
     }
   }
 
-  public show(x: number, y: number, card: Card): void {
-    this.activeCard = card;
+  public show(x: number, y: number): void {
     this.visible = true;
-    const menu = this.shadowRoot?.querySelector(".context-menu") as HTMLElement;
-    if (menu) {
-      menu.style.left = `${x}px`;
-      menu.style.top = `${y}px`;
-    }
+    this.x = x;
+    this.y = y;
+
+    // 确保菜单不会超出视窗
+    requestAnimationFrame(() => {
+      const rect = this.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        this.x = window.innerWidth - rect.width;
+      }
+      if (rect.bottom > window.innerHeight) {
+        this.y = window.innerHeight - rect.height;
+      }
+    });
   }
 
   public hide(): void {
     this.visible = false;
-    const submenu = this.shadowRoot?.querySelector(".submenu");
-    if (submenu) {
-      submenu.classList.remove("visible");
-    }
   }
 
-  protected handleCopy(): void {
-    if (this.activeCard) {
-      // TODO: 实现复制功能
-      this.hide();
-    }
-  }
-
-  protected handlePaste(): void {
-    if (this.activeCard) {
-      // TODO: 实现粘贴功能
-      this.hide();
-    }
-  }
-
-  protected handleSort(type: "rainbow" | "line" | "circle"): void {
-    if (this.activeCard) {
-      // TODO: 实现排序功能
-      this.hide();
-    }
-  }
-
-  protected handleZIndex(action: "top" | "bottom" | "up" | "down"): void {
-    if (this.activeCard) {
-      // TODO: 实现层级调整功能
-      this.hide();
-    }
-  }
-
-  protected showSubmenu(
-    e: MouseEvent,
-    items: Array<{ icon: string; text: string; action: () => void }>
-  ): void {
-    const submenu = this.shadowRoot?.querySelector(".submenu");
-    const target = e.currentTarget as HTMLElement;
-    if (submenu && target) {
-      const rect = target.getBoundingClientRect();
-      (submenu as HTMLElement).style.left = `${rect.right}px`;
-      (submenu as HTMLElement).style.top = `${rect.top}px`;
-      submenu.classList.add("visible");
-
-      // 更新子菜单内容
-      submenu.innerHTML = "";
-      items.forEach((item) => {
-        const menuItem = document.createElement("div");
-        menuItem.className = "context-menu-item";
-        menuItem.innerHTML = `
-          <span style="margin-right: 8px">${item.icon}</span>
-          <span>${item.text}</span>
-        `;
-        menuItem.addEventListener("click", () => {
-          item.action();
-          this.hide();
-        });
-        submenu.appendChild(menuItem);
-      });
-    }
-  }
-
-  protected override render() {
+  override render(): TemplateResult {
     return html`
-      <div class="context-menu ${this.visible ? "visible" : ""}">
-        <div class="context-menu-item" @click=${this.handleCopy}>
-          <span style="margin-right: 8px">📋</span>
-          <span>复制</span>
-        </div>
-        <div class="context-menu-item" @click=${this.handlePaste}>
-          <span style="margin-right: 8px">📥</span>
-          <span>粘贴</span>
-        </div>
-        <div class="context-menu-separator"></div>
-        <div
-          class="context-menu-item"
-          @mouseenter=${(e: MouseEvent) =>
-            this.showSubmenu(e, [
-              {
-                icon: "🌈",
-                text: "彩虹流排序",
-                action: () => this.handleSort("rainbow"),
-              },
-              {
-                icon: "📏",
-                text: "直线排序",
-                action: () => this.handleSort("line"),
-              },
-              {
-                icon: "🔄",
-                text: "环形排序",
-                action: () => this.handleSort("circle"),
-              },
-            ])}
-        >
-          <span style="margin-right: 8px">🎯</span>
-          <span>排序</span>
-          <span style="position: absolute; right: 8px">›</span>
-        </div>
-        <div class="context-menu-separator"></div>
-        <div
-          class="context-menu-item"
-          @mouseenter=${(e: MouseEvent) =>
-            this.showSubmenu(e, [
-              {
-                icon: "⬆️",
-                text: "置于顶层",
-                action: () => this.handleZIndex("top"),
-              },
-              {
-                icon: "⬇️",
-                text: "置于底层",
-                action: () => this.handleZIndex("bottom"),
-              },
-              {
-                icon: "↕️",
-                text: "上移一层",
-                action: () => this.handleZIndex("up"),
-              },
-              {
-                icon: "↕️",
-                text: "下移一层",
-                action: () => this.handleZIndex("down"),
-              },
-            ])}
-        >
-          <span style="margin-right: 8px">📚</span>
-          <span>层级</span>
-          <span style="position: absolute; right: 8px">›</span>
-        </div>
+      <div
+        class="context-menu ${this.visible ? "visible" : ""}"
+        style="left: ${this.x}px; top: ${this.y}px"
+      >
+        ${this.items.map((item) => this.renderMenuItem(item))}
       </div>
-      <div class="submenu"></div>
     `;
+  }
+
+  private renderMenuItem(item: ContextMenuItem): TemplateResult {
+    return html`
+      <div
+        class="context-menu-item"
+        @click=${(e: MouseEvent) => this.handleItemClick(e, item)}
+        @mouseenter=${(e: MouseEvent) => this.handleSubmenu(e, item)}
+      >
+        ${item.icon ? html`<span class="icon">${item.icon}</span>` : ""}
+        <span class="label">${item.label}</span>
+        ${item.shortcut
+          ? html`<span class="shortcut">${item.shortcut}</span>`
+          : ""}
+        ${item.children
+          ? html`
+              <span class="arrow">›</span>
+              <div class="submenu">
+                ${item.children.map((child) => this.renderMenuItem(child))}
+              </div>
+            `
+          : ""}
+      </div>
+    `;
+  }
+
+  private handleItemClick(e: MouseEvent, item: ContextMenuItem): void {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("handleItemClick", item);
+
+    if (item.children?.length) {
+      return;
+    }
+
+    if (item.handler) {
+      item.handler();
+    }
+    this.hide();
+    this.dispatchEvent(new CustomEvent("menu-item-click", { detail: item }));
+  }
+
+  private handleSubmenu(e: MouseEvent, item: ContextMenuItem): void {
+    console.log("handleSubmenu", item);
+    if (!item.children?.length) return;
+
+    const submenu = (e.currentTarget as HTMLElement).querySelector(".submenu");
+    if (!submenu) return;
+
+    requestAnimationFrame(() => {
+      const rect = submenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        (submenu as HTMLElement).style.left = "auto";
+        (submenu as HTMLElement).style.right = "100%";
+      }
+      if (rect.bottom > window.innerHeight) {
+        const overflowY = rect.bottom - window.innerHeight;
+        (submenu as HTMLElement).style.top = `-${overflowY}px`;
+      }
+    });
   }
 }

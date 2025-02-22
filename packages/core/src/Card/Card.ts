@@ -179,7 +179,9 @@ export class Card extends Container {
     if (!this.isTextEditing) {
       this.isTextEditing = true;
       this.text.visible = false;
-      this.whiteboard.showEditableText(this);
+      // this.whiteboard.showEditableText(this);
+
+      this.app.stage.emit("text-edit", event, this);
     }
   }
 
@@ -406,7 +408,8 @@ export class Card extends Container {
   public handleTap(event?: FederatedPointerEvent): void {
     this.whiteboard.setSelection(this);
     if (event) {
-      this.whiteboard.showCardToolbar(event, this);
+      // this.whiteboard.showCardToolbar(event, this);
+      this.app.stage.emit("toolbar-show", event, this);
     }
   }
 
@@ -420,11 +423,6 @@ export class Card extends Container {
       $set: { in_trash: true },
     });
     this.rxDocument = newestDocumen;
-  }
-
-  public handleRightClick(event: FederatedPointerEvent): void {
-    this.setSelected(true);
-    this.whiteboard.showContextMenu(event, this);
   }
 
   public updatePosition(x: number, y: number): void {

@@ -13,10 +13,19 @@ export function layoutCardsMasonry<
     cardWidth?: number;
     columnGap?: number;
     rowGap?: number;
+    startX?: number;
+    startY?: number;
   } = {}
 ): void {
   // 解构可选参数并设置默认值
-  const { columns = 5, cardWidth = 300, columnGap = 10, rowGap = 10 } = options;
+  const {
+    columns = 5,
+    cardWidth = 300,
+    columnGap = 10,
+    rowGap = 10,
+    startX = 0, // 新增：起始X坐标默认值
+    startY = 0, // 新增：起始Y坐标默认值
+  } = options;
 
   // 初始化每一列的累计高度数组
   let columnHeights: number[] = new Array(columns).fill(0);
@@ -33,11 +42,11 @@ export function layoutCardsMasonry<
       Math.min(...columnHeights)
     );
 
-    // 计算卡片的 x 坐标：列索引 * （卡片宽度 + 列间距）
-    card.x = minColumnIndex * (cardWidth + columnGap);
+    // 计算卡片的 x 坐标：起始X + 列索引 * （卡片宽度 + 列间距）
+    card.x = startX + minColumnIndex * (cardWidth + columnGap);
 
-    // 计算卡片的 y 坐标：该列的累计高度
-    card.y = columnHeights[minColumnIndex];
+    // 计算卡片的 y 坐标：起始Y + 该列的累计高度
+    card.y = startY + columnHeights[minColumnIndex];
 
     // 更新该列的累计高度：加上当前卡片的高度和行间距
     columnHeights[minColumnIndex] += card.height + rowGap;
@@ -59,6 +68,8 @@ export function layoutCardsInCircle<
     centerY?: number;
     radius?: number;
     startAngle?: number;
+    startX?: number; // 新增：起始X坐标
+    startY?: number; // 新增：起始Y坐标
   } = {}
 ): void {
   // 解构可选参数并设置默认值
@@ -67,21 +78,19 @@ export function layoutCardsInCircle<
     centerY = 500, // 圆心 Y 坐标
     radius = 500, // 半径
     startAngle = 0, // 起始角度（弧度）
+    startX = 0, // 新增：起始X坐标默认值
+    startY = 0, // 新增：起始Y坐标默认值
   } = options;
 
   const totalCards = cards.length;
-  const angleIncrement = (2 * Math.PI) / totalCards; // 每个卡片之间的角度增量
+  const angleIncrement = (2 * Math.PI) / totalCards;
 
-  // 遍历所有卡片，计算它们的 x 和 y 坐标
   cards.forEach((card, index) => {
-    // 当前卡片的角度
     const angle = startAngle + index * angleIncrement;
 
-    // 计算卡片的 x 坐标
-    card.x = centerX + radius * Math.cos(angle) - card.width / 2;
-
-    // 计算卡片的 y 坐标
-    card.y = centerY + radius * Math.sin(angle) - card.height / 2;
+    // 更新坐标计算，加入startX和startY偏移
+    card.x = startX + (centerX + radius * Math.cos(angle) - card.width / 2);
+    card.y = startY + (centerY + radius * Math.sin(angle) - card.height / 2);
   });
 }
 
@@ -99,24 +108,25 @@ export function layoutCardsRandomly<
     areaWidth?: number;
     areaHeight?: number;
     padding?: number;
+    startX?: number; // 新增：起始X坐标
+    startY?: number; // 新增：起始Y坐标
   } = {}
 ): void {
-  // 解构可选参数并设置默认值
   const {
-    areaWidth = 800, // 区域宽度
-    areaHeight = 600, // 区域高度
-    padding = 0, // 内边距
+    areaWidth = 800,
+    areaHeight = 600,
+    padding = 0,
+    startX = 0, // 新增：起始X坐标默认值
+    startY = 0, // 新增：起始Y坐标默认值
   } = options;
 
-  // 遍历所有卡片，计算它们的 x 和 y 坐标
   cards.forEach((card) => {
-    // 计算可用的最大 x 和 y 值
     const maxX = areaWidth - card.width - padding * 2;
     const maxY = areaHeight - card.height - padding * 2;
 
-    // 随机生成 x 和 y 坐标
-    card.x = padding + Math.random() * maxX;
-    card.y = padding + Math.random() * maxY;
+    // 更新坐标计算，加入startX和startY偏移
+    card.x = startX + padding + Math.random() * maxX;
+    card.y = startY + padding + Math.random() * maxY;
   });
 }
 

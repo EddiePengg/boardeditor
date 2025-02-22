@@ -2,6 +2,15 @@ import * as PIXI from "pixi.js";
 import { Card } from "../../Card/Card";
 import { FederatedPointerEvent } from "pixi.js";
 
+/**
+ * 框选管理器
+ *
+ * 1. **框选**状态
+ * 2. **拖拽**状态
+ * 3. 选中元素
+ * 4. 选择框
+ *
+ */
 export class BoxSelection {
   public selectionBox: PIXI.Graphics;
   private selectedElements: Set<PIXI.Container> = new Set();
@@ -274,6 +283,8 @@ export class BoxSelection {
    * clear the selected elements and the selection box
    */
   public clear(): void {
+    this.stage.emit("boxselection-clear");
+
     this.selectedElements.forEach((element) => {
       if (
         "setSelected" in element &&
@@ -339,10 +350,5 @@ export class BoxSelection {
     if (this.selectedElements.size > 0) {
       this.drawSelectionBoxForElements();
     }
-  }
-
-  public handleRightClick(event: FederatedPointerEvent): void {
-    console.log("handleRightClick");
-    this.selectionBox.emit("rightClick", event);
   }
 }

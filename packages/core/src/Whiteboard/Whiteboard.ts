@@ -56,26 +56,15 @@ export class Whiteboard implements Whiteboard {
 
   protected initializeManagers(): void {
     this.whiteManager = new WhiteBoardManager(this.app, this.mainContainer);
-
-    // Listen for 'transformed' event (emitted by WhiteManager) to update UI position
-    this.app.stage.on("transformed", () => {
-      if (this.uiManager) {
-        this.uiManager.updatePosition();
-      }
-    });
-
-    this.whiteManager
-      .getBoxSelection()
-      .selectionBox.on("rightClick", (event: FederatedPointerEvent) => {
-        console.log("rightClick", event);
-        this.showContextMenu(event, null);
-      });
   }
 
   public setSelection(selection: Container | null): void {
     this.whiteManager.getBoxSelection().selectElement(selection);
   }
 
+  /**
+   * 清除白板内容
+   */
   public clear(): void {
     this.whiteManager.getBoxSelection().clear();
 
@@ -86,16 +75,11 @@ export class Whiteboard implements Whiteboard {
     });
   }
 
-  public showCardToolbar(event: FederatedPointerEvent, card: Card): void {
-    if (!this.uiManager) return;
-    this.uiManager.showToolbar(event, card);
-  }
-
-  public showEditableText(card: Card): void {
-    if (!this.uiManager) return;
-    this.uiManager.showEditableText(card);
-  }
-
+  /**
+   * 初始化 UI 管理器
+   *
+   * 需要在初始化之后调用
+   */
   public initializeUI(): void {
     if (!this.app.canvas.parentElement) {
       console.error("Cannot initialize UI: Canvas is not in DOM");
@@ -103,16 +87,9 @@ export class Whiteboard implements Whiteboard {
     }
 
     // 创建 UIOverlayManager 实例
-    this.uiManager = new UIOverlayManager();
-    // 设置 app 属性
-    this.uiManager.app = this.app;
+    this.uiManager = new UIOverlayManager(this.app);
+
     // 将组件添加到 canvas 的父元素中
     this.app.canvas.parentElement.appendChild(this.uiManager);
-  }
-
-  public showContextMenu(event: FederatedPointerEvent, card: Card): void {
-    if (this.uiManager) {
-      this.uiManager.showContextMenu(event, card);
-    }
   }
 }

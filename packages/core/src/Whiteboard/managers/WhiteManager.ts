@@ -2,6 +2,7 @@ import * as PIXI from "pixi.js";
 import { BoxSelection } from "./BoxSelection";
 import { Card } from "../..";
 import { KeyboardManager, ShortcutConfig } from "./KeyboardManager";
+import { FederatedPointerEvent } from "pixi.js";
 
 type GestureHandler = (event: PIXI.FederatedPointerEvent) => void;
 
@@ -17,6 +18,50 @@ interface TouchPoint {
   id: number;
   pos: PIXI.Point;
 }
+
+/**
+ *
+ * ```
+ * mermaid
+ *
+ * graph TD
+ *   A[PointerDown事件] --> B{输入类型?}
+ *   B -->|鼠标| C{按键类型?}
+ *   C -->|左键| D[BoxSelection处理]
+ *   C -->|右键| E[执行canvasPanning]
+ *
+ *   B -->|触摸| F{手指数量?}
+ *   F -->|两个手指| G[执行canvasPinching]
+ *   F -->|一个手指| H{按下时长≥0.25s?}
+ *   H -->|是| D
+ *   H -->|否| I{点击选中内容?}
+ *   I -->|是| J[直接拖动]
+ *   I -->|否| E
+ *   style A stroke:#666,stroke-width:2px
+ *   style B stroke:#666,stroke-width:2px
+ *   style C stroke:#666,stroke-width:2px
+ *   style F stroke:#666,stroke-width:2px
+ *   style H stroke:#666,stroke-width:2px
+ *   style I stroke:#666,stroke-width:2px
+ *   classDef process fill:#e6f3ff,stroke:#3399ff
+ *   class D,E,G,J process
+ *
+ *
+ *   D[BoxSelection处理] --> K{点击选中内容?}
+ *   K -->|是| J[直接拖动]
+ *   K -->|否| L{点击位置类型?}
+ *   L -->|Stage| M[建立选择框]
+ *   L -->|元素| N[执行元素选中]
+ *   N --> O[拖动该元素]
+ *
+ *   style K stroke:#666,stroke-width:2px
+ *   style L stroke:#666,stroke-width:2px
+ *   classDef process fill:#e6f3ff,stroke:#3399ff
+ *   class J,M,N,O process
+ *
+ * ```
+ *
+ */
 
 export class WhiteBoardManager {
   private isTouchPanning: boolean = false; // 触摸拖动
@@ -349,19 +394,14 @@ export class WhiteBoardManager {
       event.target.handleTap(event);
     }
 
-    if (event.button === 2) {
-      // 处理右键点击
-      event.target.handleRightClick?.(event);
+    // 处理双击
+    const now = Date.now();
+    if (now - this.lastTapTime < this.doubleTapDelay) {
+      console.log("handleCardTap doubleTap", event.target);
+      event.target.handleDoubleTap(event);
+      this.lastTapTime = 0;
     } else {
-      // 处理双击
-      const now = Date.now();
-      if (now - this.lastTapTime < this.doubleTapDelay) {
-        console.log("handleCardTap doubleTap", event.target);
-        event.target.handleDoubleTap(event);
-        this.lastTapTime = 0;
-      } else {
-        this.lastTapTime = now;
-      }
+      this.lastTapTime = now;
     }
   }
 
@@ -385,21 +425,34 @@ export class WhiteBoardManager {
       return;
     }
 
+    // 处理右键事件
+    if (event.button === 2) {
+      const target = this.getRightClickTarget(event);
+      this.app.stage.emit("contextmenu", { event, target });
+    }
+
     if (event.target instanceof Card) {
       this.handleCardTap(event);
     } else if (event.target === this.app.stage) {
       this.handleStageTap(event);
-    } else if (event.target === this.boxSelection.selectionBox) {
-      this.handleBoxSelectionTap(event);
     }
 
     // 重置双击计时器
     setTimeout(() => (this.lastTapTime = 0), this.doubleTapDelay);
   }
 
-  private handleBoxSelectionTap(event: PIXI.FederatedPointerEvent): void {
-    if (event.button === 2) {
-      this.boxSelection.handleRightClick(event);
+  /**
+   * 获取右键点击的目标
+   * @param event 事件对象
+   * @returns 目标对象
+   */
+  private getRightClickTarget(event: FederatedPointerEvent): unknown {
+    if (event.target instanceof Card) {
+      return event.target;
+    } else if (event.target === this.boxSelection.selectionBox) {
+      return this.boxSelection;
+    } else {
+      return this.app.stage;
     }
   }
 

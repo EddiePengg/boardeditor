@@ -84,18 +84,18 @@ const TEM_CARDS_DATA = [
     throw new Error("Container element not found");
   }
 
-  const whiteboard = new NapkinBoard(db.cards, {
+  const napkinWhiteboard = new NapkinBoard(db.cards, {
     backgroundColor: "#FFF8E6",
     resizeTo: container,
     resolution: 2,
   });
-  await whiteboard.initialize();
+  await napkinWhiteboard.initialize();
 
-  container.appendChild(whiteboard.app.canvas);
-  whiteboard.initializeUI();
+  container.appendChild(napkinWhiteboard.app.canvas);
+  napkinWhiteboard.initializeUI();
 
   // 初始化卡片
-  await whiteboard.search({ selector: { in_trash: false } });
+  await napkinWhiteboard.search({ selector: { in_trash: false } });
 
-  whiteboard.layout(layoutCardsMasonry);
+  napkinWhiteboard.layout(layoutCardsMasonry);
 })();
